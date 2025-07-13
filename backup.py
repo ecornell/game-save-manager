@@ -5,8 +5,9 @@ import glob
 import argparse
 import sys
 import time
+import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 # Color codes for better terminal output
 class Colors:
@@ -80,16 +81,236 @@ def get_directory_size(path: Path) -> int:
         pass
     return total_size
 
+def load_games_config(config_path: Path) -> Dict[str, Any]:
+    """Load games configuration from JSON file"""
+    try:
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            # Create default config
+            default_config = {
+                "games": {
+                    "example_game": {
+                        "name": "Example Game",
+                        "save_path": "C:\\Users\\{username}\\Documents\\Example Game\\Saves",
+                        "description": "Example game configuration"
+                    }
+                },
+                "settings": {
+                    "default_max_backups": 10,
+                    "auto_expand_paths": True
+                }
+            }
+            save_games_config(config_path, default_config)
+            return default_config
+    except Exception as e:
+        print_error(f"Failed to load config file: {e}")
+        return {"games": {}, "settings": {"default_max_backups": 10}}
+
+def save_games_config(config_path: Path, config: Dict[str, Any]):
+    """Save games configuration to JSON file"""
+    try:
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print_error(f"Failed to save config file: {e}")
+
+def expand_path(path_str: str) -> str:
+    """Expand environment variables and user paths"""
+    # Expand environment variables
+    expanded = os.path.expandvars(path_str)
+    # Expand user home directory
+    expanded = os.path.expanduser(expanded)
+    return expanded
+
+def list_games(config: Dict[str, Any]) -> List[tuple]:
+    """List available games from config"""
+    games = []
+    for game_id, game_info in config.get("games", {}).items():
+        games.append((game_id, game_info))
+    return games
+
+def select_game(config: Dict[str, Any]) -> Optional[tuple]:
+    """Interactive game selection"""
+    games = list_games(config)
+    
+    if not games:
+        print_warning("No games configured. Please add games to the config file first.")
+        return None
+    
+    print_header("Select Game")
+    
+    for i, (game_id, game_info) in enumerate(games, 1):
+        name = game_info.get("name", game_id)
+        save_path = game_info.get("save_path", "Unknown")
+        description = game_info.get("description", "")
+        
+        print_colored(f"{i:2d}. ", Colors.CYAN, bold=True)
+        print_colored(f"{name}", Colors.WHITE, bold=True)
+        print_colored(f"    📁 {save_path}", Colors.BLUE)
+        if description:
+            print_colored(f"    📝 {description}", Colors.MAGENTA)
+    
+    try:
+        choice = input(f"\n{Colors.YELLOW}Select game number (1-{len(games)}) or 'q' to quit: {Colors.END}")
+        if choice.lower() == 'q':
+            return None
+        
+        choice = int(choice) - 1
+        if 0 <= choice < len(games):
+            return games[choice]
+        else:
+            print_error("Invalid choice.")
+            return None
+    except (ValueError, IndexError):
+        print_error("Invalid input.")
+        return None
+
+def add_game_to_config(config_path: Path, config: Dict[str, Any]):
+    """Interactive function to add a new game to config"""
+    print_header("Add New Game")
+    
+    game_id = get_user_input_with_prompt("Game ID (short name, no spaces)")
+    if not game_id or ' ' in game_id:
+        print_error("Invalid game ID. Must not contain spaces.")
+        return
+    
+    if game_id in config.get("games", {}):
+        print_error(f"Game '{game_id}' already exists in config.")
+        return
+    
+    name = get_user_input_with_prompt("Game name")
+    if not name:
+        print_error("Game name is required.")
+        return
+    
+    save_path = get_user_input_with_prompt("Save directory path")
+    if not save_path:
+        print_error("Save path is required.")
+        return
+    
+    description = get_user_input_with_prompt("Description (optional)")
+    
+    # Validate path exists (after expansion)
+    expanded_path = expand_path(save_path)
+    if not os.path.exists(expanded_path):
+        print_warning(f"Path does not exist: {expanded_path}")
+        confirm = input(f"{Colors.YELLOW}Add anyway? (y/N): {Colors.END}")
+        if confirm.lower() != 'y':
+            print_info("Game not added.")
+            return
+    
+    # Add to config
+    if "games" not in config:
+        config["games"] = {}
+    
+    config["games"][game_id] = {
+        "name": name,
+        "save_path": save_path,
+        "description": description
+    }
+    
+    save_games_config(config_path, config)
+    print_success(f"Game '{name}' added to config!")
+
+def edit_game_config(config_path: Path, config: Dict[str, Any]):
+    """Interactive function to edit a game in config"""
+    games = list_games(config)
+    if not games:
+        print_warning("No games configured.")
+        return
+    
+    print_header("Edit Game Configuration")
+    
+    # Show games and let user select
+    for i, (game_id, game_info) in enumerate(games, 1):
+        name = game_info.get("name", game_id)
+        print_colored(f"{i:2d}. {name}", Colors.WHITE)
+    
+    try:
+        choice = input(f"\n{Colors.YELLOW}Select game to edit (1-{len(games)}) or 'q' to quit: {Colors.END}")
+        if choice.lower() == 'q':
+            return
+        
+        choice = int(choice) - 1
+        if not (0 <= choice < len(games)):
+            print_error("Invalid choice.")
+            return
+        
+        game_id, game_info = games[choice]
+        
+        print_info(f"Editing: {game_info.get('name', game_id)}")
+        
+        # Edit fields
+        new_name = get_user_input_with_prompt("Game name", game_info.get("name"))
+        new_path = get_user_input_with_prompt("Save directory path", game_info.get("save_path"))
+        new_desc = get_user_input_with_prompt("Description", game_info.get("description", ""))
+        
+        # Update config
+        config["games"][game_id].update({
+            "name": new_name,
+            "save_path": new_path,
+            "description": new_desc
+        })
+        
+        save_games_config(config_path, config)
+        print_success(f"Game '{new_name}' updated!")
+        
+    except (ValueError, IndexError):
+        print_error("Invalid input.")
+
+def remove_game_from_config(config_path: Path, config: Dict[str, Any]):
+    """Interactive function to remove a game from config"""
+    games = list_games(config)
+    if not games:
+        print_warning("No games configured.")
+        return
+    
+    print_header("Remove Game")
+    
+    # Show games and let user select
+    for i, (game_id, game_info) in enumerate(games, 1):
+        name = game_info.get("name", game_id)
+        print_colored(f"{i:2d}. {name}", Colors.WHITE)
+    
+    try:
+        choice = input(f"\n{Colors.YELLOW}Select game to remove (1-{len(games)}) or 'q' to quit: {Colors.END}")
+        if choice.lower() == 'q':
+            return
+        
+        choice = int(choice) - 1
+        if not (0 <= choice < len(games)):
+            print_error("Invalid choice.")
+            return
+        
+        game_id, game_info = games[choice]
+        game_name = game_info.get("name", game_id)
+        
+        confirm = input(f"\n{Colors.RED}Are you sure you want to remove '{game_name}'? (y/N): {Colors.END}")
+        if confirm.lower() != 'y':
+            print_info("Removal cancelled.")
+            return
+        
+        del config["games"][game_id]
+        save_games_config(config_path, config)
+        print_success(f"Game '{game_name}' removed from config!")
+        
+    except (ValueError, IndexError):
+        print_error("Invalid input.")
+
 class SaveBackupManager:
-    def __init__(self, save_dir=None, backup_dir=None, max_backups=10):
+    def __init__(self, save_dir=None, backup_dir=None, max_backups=10, game_name=None):
         # Default to current directory if not specified
         self.save_dir = Path(save_dir) if save_dir else Path.cwd()
         self.backup_dir = Path(backup_dir) if backup_dir else self.save_dir / "backups"
         self.max_backups = max_backups
+        self.game_name = game_name
         
         # Create backup directory if it doesn't exist
         self.backup_dir.mkdir(exist_ok=True)
 
+        print_info(f"Game: {self.game_name or 'Custom'}")
         print_info(f"Save directory: {self.save_dir}")
         print_info(f"Backup directory: {self.backup_dir}")
         print_info(f"Maximum backups: {self.max_backups}")
@@ -423,19 +644,21 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=""":
 Examples:
-  python backup.py                          # Interactive mode
-  python backup.py --backup                 # Quick backup
+  python backup.py                          # Interactive mode with game selection
+  python backup.py --game skyrim            # Use configured game 'skyrim'
+  python backup.py --backup                 # Quick backup (current dir or selected game)
   python backup.py --backup -d "Before boss fight"  # Backup with description
   python backup.py --list                   # List all backups
   python backup.py --restore 1              # Restore backup #1
-  python backup.py --delete 3               # Delete backup #3
-  python backup.py --cleanup --keep 5       # Keep only 5 most recent backups
+  python backup.py --config                 # Manage game configurations
         """
     )
     
-    parser.add_argument("--save-dir", help="Path to save directory (default: current directory)")
+    parser.add_argument("--save-dir", help="Path to save directory (overrides game config)")
     parser.add_argument("--backup-dir", help="Path to backup directory (default: ./backups)")
-    parser.add_argument("--max-backups", type=int, default=10, help="Maximum number of backups to keep (default: 10)")
+    parser.add_argument("--max-backups", type=int, help="Maximum number of backups to keep")
+    parser.add_argument("--game", help="Game ID from config file")
+    parser.add_argument("--config", action="store_true", help="Manage game configurations")
     parser.add_argument("--backup", action="store_true", help="Create a backup")
     parser.add_argument("-d", "--description", help="Description for the backup")
     parser.add_argument("--restore", type=int, help="Restore backup by number")
@@ -449,9 +672,88 @@ Examples:
     # Print welcome message
     print_header("🎮 Save Game Backup Manager")
     
+    # Load config file
+    config_path = Path(__file__).parent / "games_config.json"
+    config = load_games_config(config_path)
+    
+    # Handle config management
+    if args.config:
+        while True:
+            print_header("Game Configuration Manager")
+            print_colored("1. 📋 List games", Colors.BLUE)
+            print_colored("2. ➕ Add game", Colors.GREEN)
+            print_colored("3. ✏️  Edit game", Colors.YELLOW)
+            print_colored("4. 🗑️  Remove game", Colors.RED)
+            print_colored("5. 🚪 Back to main menu", Colors.WHITE)
+            
+            choice = input(f"\n{Colors.CYAN}Enter your choice (1-5): {Colors.END}").strip()
+            
+            if choice == "1":
+                games = list_games(config)
+                if games:
+                    print_header("Configured Games")
+                    for i, (game_id, game_info) in enumerate(games, 1):
+                        name = game_info.get("name", game_id)
+                        save_path = game_info.get("save_path", "Unknown")
+                        description = game_info.get("description", "")
+                        
+                        print_colored(f"{i:2d}. {name} (ID: {game_id})", Colors.WHITE, bold=True)
+                        print_colored(f"    📁 {save_path}", Colors.BLUE)
+                        if description:
+                            print_colored(f"    📝 {description}", Colors.MAGENTA)
+                else:
+                    print_warning("No games configured.")
+            elif choice == "2":
+                add_game_to_config(config_path, config)
+                config = load_games_config(config_path)  # Reload
+            elif choice == "3":
+                edit_game_config(config_path, config)
+                config = load_games_config(config_path)  # Reload
+            elif choice == "4":
+                remove_game_from_config(config_path, config)
+                config = load_games_config(config_path)  # Reload
+            elif choice == "5":
+                break
+            else:
+                print_error("Invalid choice. Please enter 1-5.")
+            
+            if choice in ["1", "2", "3", "4"]:
+                input(f"\n{Colors.CYAN}Press Enter to continue...{Colors.END}")
+    
+    # Determine save directory and game info
+    save_dir = args.save_dir
+    game_name = None
+    max_backups = args.max_backups or config.get("settings", {}).get("default_max_backups", 10)
+    
+    if args.game:
+        # Use specified game from config
+        game_info = config.get("games", {}).get(args.game)
+        if game_info:
+            save_dir = expand_path(game_info["save_path"])
+            game_name = game_info["name"]
+            print_success(f"Using configured game: {game_name}")
+        else:
+            print_error(f"Game '{args.game}' not found in config.")
+            return
+    elif not save_dir and not args.config:
+        # Interactive game selection if no save dir specified
+        selected = select_game(config)
+        if selected:
+            game_id, game_info = selected
+            save_dir = expand_path(game_info["save_path"])
+            game_name = game_info["name"]
+            print_success(f"Selected game: {game_name}")
+        else:
+            print_info("No game selected, using current directory.")
+    
+    # Validate save directory exists
+    if save_dir and not os.path.exists(save_dir):
+        print_error(f"Save directory does not exist: {save_dir}")
+        return
+    
     # Initialize backup manager
     try:
-        manager = SaveBackupManager(args.save_dir, args.backup_dir, args.max_backups)
+        manager = SaveBackupManager(save_dir, args.backup_dir, max_backups, game_name)
     except Exception as e:
         print_error(f"Failed to initialize backup manager: {e}")
         sys.exit(1)
@@ -468,19 +770,23 @@ Examples:
             manager.delete_backup(args.delete)
         elif args.cleanup:
             manager.cleanup_backups(args.keep)
-        else:
+        elif not args.config:
             # Interactive mode
             while True:
                 print_header("Main Menu")
+                if game_name:
+                    print_colored(f"🎮 Current Game: {game_name}", Colors.CYAN, bold=True)
                 print_colored("1. 💾 Create backup", Colors.GREEN)
                 print_colored("2. 📋 List backups", Colors.BLUE)
                 print_colored("3. 🔄 Restore backup", Colors.YELLOW)
                 print_colored("4. 🗑️  Delete backup", Colors.RED)
                 print_colored("5. 🧹 Cleanup old backups", Colors.MAGENTA)
-                print_colored("6. 🚪 Exit", Colors.WHITE)
+                print_colored("6. 🎮 Switch game", Colors.CYAN)
+                print_colored("7. ⚙️  Manage games config", Colors.WHITE)
+                print_colored("8. 🚪 Exit", Colors.WHITE)
                 
                 try:
-                    choice = input(f"\n{Colors.CYAN}Enter your choice (1-6): {Colors.END}").strip()
+                    choice = input(f"\n{Colors.CYAN}Enter your choice (1-8): {Colors.END}").strip()
                     
                     if choice == "1":
                         description = get_user_input_with_prompt("Backup description (optional)")
@@ -499,10 +805,26 @@ Examples:
                         except ValueError:
                             print_error("Invalid number entered.")
                     elif choice == "6":
+                        selected = select_game(config)
+                        if selected:
+                            game_id, game_info = selected
+                            new_save_dir = expand_path(game_info["save_path"])
+                            new_game_name = game_info["name"]
+                            
+                            if os.path.exists(new_save_dir):
+                                manager = SaveBackupManager(new_save_dir, args.backup_dir, max_backups, new_game_name)
+                                print_success(f"Switched to: {new_game_name}")
+                            else:
+                                print_error(f"Save directory does not exist: {new_save_dir}")
+                    elif choice == "7":
+                        # Jump to config management
+                        args.config = True
+                        break
+                    elif choice == "8":
                         print_success("Thanks for using Save Game Backup Manager! 👋")
                         break
                     else:
-                        print_error("Invalid choice. Please enter 1-6.")
+                        print_error("Invalid choice. Please enter 1-8.")
                         
                 except KeyboardInterrupt:
                     print_success("\nThanks for using Save Game Backup Manager! 👋")
@@ -511,7 +833,8 @@ Examples:
                     print_error(f"An error occurred: {e}")
                 
                 # Pause before showing menu again
-                input(f"\n{Colors.CYAN}Press Enter to continue...{Colors.END}")
+                if choice not in ["7", "8"]:
+                    input(f"\n{Colors.CYAN}Press Enter to continue...{Colors.END}")
                 
     except KeyboardInterrupt:
         print_success("\nThanks for using Save Game Backup Manager! 👋")
