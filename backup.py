@@ -24,10 +24,10 @@ class Colors:
     UNDERLINE = '\033[4m'
     END = '\033[0m'
 
-def print_colored(text: str, color: str = Colors.WHITE, bold: bool = False):
+def print_colored(text: str, color: str = Colors.WHITE, bold: bool = False, end: str = "\n"):
     """Print colored text to terminal"""
     prefix = Colors.BOLD if bold else ""
-    print(f"{prefix}{color}{text}{Colors.END}")
+    print(f"{prefix}{color}{text}{Colors.END}", end=end)
 
 def print_header(text: str):
     """Print a formatted header"""
@@ -148,7 +148,7 @@ def select_game(config: Dict[str, Any]) -> Optional[tuple]:
         save_path = game_info.get("save_path", "Unknown")
         description = game_info.get("description", "")
         
-        print_colored(f"{i:2d}. ", Colors.CYAN, bold=True)
+        print_colored(f"{i:2d}. ", Colors.CYAN, bold=True, end="")
         print_colored(f"{name}", Colors.WHITE, bold=True)
         print_colored(f"    📁 {save_path}", Colors.BLUE)
         if description:
@@ -447,7 +447,7 @@ class SaveBackupManager:
                     except Exception:
                         pass
                 
-                print_colored(f"{i:2d}. ", Colors.CYAN, bold=True)
+                print_colored(f"{i:2d}. ", Colors.CYAN, bold=True, end="")
                 print_colored(f"{backup_name}", Colors.WHITE, bold=True)
                 print_colored(f"    📅 {formatted_time} ({age_str})", Colors.BLUE)
                 print_colored(f"    📦 Size: {backup_size}{description}", Colors.MAGENTA)
@@ -826,7 +826,7 @@ Examples:
             while True:
                 print_header("Main Menu")
                 if game_name:
-                    print_colored(f"🎮 Current Game: {game_name}", Colors.CYAN, bold=True)
+                    print_colored(f"🎮 Current Game: {game_name}\n", Colors.CYAN, bold=True)
                 print_colored("1. 💾 Create backup", Colors.GREEN)
                 print_colored("2. 📋 List backups", Colors.BLUE)
                 print_colored("3. 🔄 Restore backup", Colors.YELLOW)
