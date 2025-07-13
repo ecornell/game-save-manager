@@ -6,6 +6,8 @@ import argparse
 import sys
 import time
 import json
+import subprocess
+import threading
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -342,7 +344,7 @@ class SaveBackupManager:
         backup_pattern = self.backup_dir / "backup_*"
         return sorted(glob.glob(str(backup_pattern)), reverse=True)
     
-    def create_backup(self, description: str = None) -> Optional[Path]:
+    def create_backup(self, description: Optional[str] = None) -> Optional[Path]:
         """Create a timestamped backup of the save directory"""
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"backup_{timestamp}"
@@ -602,7 +604,7 @@ class SaveBackupManager:
             print_error(f"Failed to delete backup: {e}")
             return False
     
-    def cleanup_backups(self, keep_count: int = None):
+    def cleanup_backups(self, keep_count: Optional[int] = None):
         """Manual cleanup of old backups"""
         if keep_count is None:
             keep_count = self.max_backups
@@ -628,7 +630,7 @@ class SaveBackupManager:
             except Exception as e:
                 print_error(f"Failed to delete {backup_path}: {e}")
 
-def get_user_input_with_prompt(prompt: str, default: str = None) -> str:
+def get_user_input_with_prompt(prompt: str, default: Optional[str] = None) -> str:
     """Get user input with colored prompt"""
     if default:
         full_prompt = f"{Colors.CYAN}{prompt} [{default}]: {Colors.END}"
@@ -636,7 +638,41 @@ def get_user_input_with_prompt(prompt: str, default: str = None) -> str:
         full_prompt = f"{Colors.CYAN}{prompt}: {Colors.END}"
     
     response = input(full_prompt).strip()
-    return response if response else default
+    return response if response else (default or "")
+
+def open_config_in_notepad(config_path: Path):
+    """Open the config file in Notepad"""
+    try:
+        print_info(f"Opening config file in Notepad: {config_path}")
+        subprocess.Popen(['notepad.exe', str(config_path)])
+        print_success("Config file opened in Notepad")
+    except Exception as e:
+        print_error(f"Failed to open config file in Notepad: {e}")
+
+def monitor_config_file(config_path: Path, callback_func):
+    """Monitor config file for changes and call callback when modified"""
+    if not config_path.exists():
+        return
+    
+    last_modified = config_path.stat().st_mtime
+    
+    def monitor_loop():
+        nonlocal last_modified
+        while True:
+            try:
+                if config_path.exists():
+                    current_modified = config_path.stat().st_mtime
+                    if current_modified != last_modified:
+                        last_modified = current_modified
+                        print_info("Config file changed - reloading...")
+                        callback_func()
+                time.sleep(1)  # Check every second
+            except Exception:
+                pass  # Ignore errors during monitoring
+    
+    monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+    monitor_thread.start()
+    return monitor_thread
 
 def main():
     parser = argparse.ArgumentParser(
@@ -676,6 +712,17 @@ Examples:
     config_path = Path(__file__).parent / "games_config.json"
     config = load_games_config(config_path)
     
+    # Set up config file monitoring
+    def reload_config():
+        nonlocal config
+        try:
+            config = load_games_config(config_path)
+        except Exception as e:
+            print_error(f"Failed to reload config: {e}")
+    
+    # Start monitoring config file for changes
+    monitor_thread = monitor_config_file(config_path, reload_config)
+    
     # Handle config management
     if args.config:
         while True:
@@ -684,9 +731,10 @@ Examples:
             print_colored("2. ➕ Add game", Colors.GREEN)
             print_colored("3. ✏️  Edit game", Colors.YELLOW)
             print_colored("4. 🗑️  Remove game", Colors.RED)
-            print_colored("5. 🚪 Back to main menu", Colors.WHITE)
+            print_colored("5. � Open config in Notepad", Colors.MAGENTA)
+            print_colored("6. �🚪 Back to main menu", Colors.WHITE)
             
-            choice = input(f"\n{Colors.CYAN}Enter your choice (1-5): {Colors.END}").strip()
+            choice = input(f"\n{Colors.CYAN}Enter your choice (1-6): {Colors.END}").strip()
             
             if choice == "1":
                 games = list_games(config)
@@ -713,11 +761,14 @@ Examples:
                 remove_game_from_config(config_path, config)
                 config = load_games_config(config_path)  # Reload
             elif choice == "5":
+                open_config_in_notepad(config_path)
+                print_info("Tip: The config file will be automatically reloaded when you save changes in Notepad")
+            elif choice == "6":
                 break
             else:
-                print_error("Invalid choice. Please enter 1-5.")
+                print_error("Invalid choice. Please enter 1-6.")
             
-            if choice in ["1", "2", "3", "4"]:
+            if choice in ["1", "2", "3", "4", "5"]:
                 input(f"\n{Colors.CYAN}Press Enter to continue...{Colors.END}")
     
     # Determine save directory and game info
@@ -779,10 +830,10 @@ Examples:
                 print_colored("1. 💾 Create backup", Colors.GREEN)
                 print_colored("2. 📋 List backups", Colors.BLUE)
                 print_colored("3. 🔄 Restore backup", Colors.YELLOW)
-                print_colored("4. 🗑️  Delete backup", Colors.RED)
+                print_colored("4. 🗑️ Delete backup", Colors.RED)
                 print_colored("5. 🧹 Cleanup old backups", Colors.MAGENTA)
                 print_colored("6. 🎮 Switch game", Colors.CYAN)
-                print_colored("7. ⚙️  Manage games config", Colors.WHITE)
+                print_colored("7. ⚙️ Manage games config", Colors.WHITE)
                 print_colored("8. 🚪 Exit", Colors.WHITE)
                 
                 try:
@@ -818,8 +869,51 @@ Examples:
                                 print_error(f"Save directory does not exist: {new_save_dir}")
                     elif choice == "7":
                         # Jump to config management
-                        args.config = True
-                        break
+                        while True:
+                            print_header("Game Configuration Manager")
+                            print_colored("1. 📋 List games", Colors.BLUE)
+                            print_colored("2. ➕ Add game", Colors.GREEN)
+                            print_colored("3. ✏️  Edit game", Colors.YELLOW)
+                            print_colored("4. 🗑️  Remove game", Colors.RED)
+                            print_colored("5. 📝 Open config in Notepad", Colors.MAGENTA)
+                            print_colored("6. 🚪 Back to main menu", Colors.WHITE)
+                            
+                            config_choice = input(f"\n{Colors.CYAN}Enter your choice (1-6): {Colors.END}").strip()
+                            
+                            if config_choice == "1":
+                                games = list_games(config)
+                                if games:
+                                    print_header("Configured Games")
+                                    for i, (game_id, game_info) in enumerate(games, 1):
+                                        name = game_info.get("name", game_id)
+                                        save_path = game_info.get("save_path", "Unknown")
+                                        description = game_info.get("description", "")
+                                        
+                                        print_colored(f"{i:2d}. {name} (ID: {game_id})", Colors.WHITE, bold=True)
+                                        print_colored(f"    📁 {save_path}", Colors.BLUE)
+                                        if description:
+                                            print_colored(f"    📝 {description}", Colors.MAGENTA)
+                                else:
+                                    print_warning("No games configured.")
+                            elif config_choice == "2":
+                                add_game_to_config(config_path, config)
+                                config = load_games_config(config_path)  # Reload
+                            elif config_choice == "3":
+                                edit_game_config(config_path, config)
+                                config = load_games_config(config_path)  # Reload
+                            elif config_choice == "4":
+                                remove_game_from_config(config_path, config)
+                                config = load_games_config(config_path)  # Reload
+                            elif config_choice == "5":
+                                open_config_in_notepad(config_path)
+                                print_info("Tip: The config file will be automatically reloaded when you save changes in Notepad")
+                            elif config_choice == "6":
+                                break
+                            else:
+                                print_error("Invalid choice. Please enter 1-6.")
+                            
+                            if config_choice in ["1", "2", "3", "4", "5"]:
+                                input(f"\n{Colors.CYAN}Press Enter to continue...{Colors.END}")
                     elif choice == "8":
                         print_success("Thanks for using Save Game Backup Manager! 👋")
                         break
