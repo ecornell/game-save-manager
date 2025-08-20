@@ -316,7 +316,7 @@ class BackupManagerApp(App):
     
     #game_info {
         margin: 0 1 1 11;
-        padding: 1 0 1 2;
+        padding: 0 0 1 2;
         # border: solid $primary;
         background: $surface;
     }
@@ -336,7 +336,7 @@ class BackupManagerApp(App):
     }
 
     .backup-actions-container {
-        height: 4;
+        height: 3;
     }
 
     .backup-desc-container {
