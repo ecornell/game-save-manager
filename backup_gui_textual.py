@@ -314,8 +314,8 @@ class BackupManagerApp(App):
     }
     
     #game_info {
-        margin: 1 0;
-        padding: 1;
+        margin: 1 1 1 11;
+        padding: 1 0 1 2;
         # border: solid $primary;
         background: $surface;
     }
@@ -327,7 +327,11 @@ class BackupManagerApp(App):
     
     .game-label {
         width: 8;
-        margin: 0 1 0 0;
+        margin: 1 1 0 1;
+    }
+
+    .backup-desc-label {
+        margin: 0 1 0 1;
     }
     """
     
@@ -370,7 +374,7 @@ class BackupManagerApp(App):
                     # Game Selection Section
                     Static("🎮 Game Selection", classes="section-header"),
                     Horizontal(
-                        Label("\nGame:", classes="game-label"),
+                        Label("Game:", classes="game-label"),
                         Select(
                             options=[("No games configured", None)],
                             prompt="Choose a game...",
@@ -383,7 +387,7 @@ class BackupManagerApp(App):
                     
                     # Backup Actions Section  
                     Static("📁 Backup Actions", classes="section-header"),
-                    Label("Backup Description (optional):"),
+                    Label("Backup Description (optional):", classes="backup-desc-label"),
                     Input(placeholder="Enter backup description...", id="backup_description"),
                     Horizontal(
                         Button("💾 Create Backup", variant="success", id="create_backup"),
