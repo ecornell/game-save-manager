@@ -327,6 +327,26 @@ class SaveBackupManager:
         print_info(f"Backup directory: {self.backup_dir}")
         print_info(f"Maximum backups: {self.max_backups}")
     
+    def _safe_rmtree(self, path):
+        """Safely remove directory tree with Windows compatibility"""
+        def handle_remove_readonly(func, path, exc_info):
+            """Error handler for Windows read-only files"""
+            exc = exc_info[1] if isinstance(exc_info, tuple) else exc_info
+            if hasattr(exc, 'errno') and exc.errno == 13:  # Permission denied
+                os.chmod(path, 0o777)
+                func(path)
+            else:
+                raise exc
+        
+        # Use onexc for Python 3.12+ or onerror for older versions
+        try:
+            shutil.rmtree(path, onexc=handle_remove_readonly)
+        except TypeError:
+            # Fallback to onerror for Python < 3.12
+            def handle_remove_readonly_old(func, path, exc_info):
+                handle_remove_readonly(func, path, exc_info)
+            shutil.rmtree(path, onerror=handle_remove_readonly_old)
+    
     def _get_save_size(self) -> str:
         """Get the size of the save directory"""
         try:
@@ -343,7 +363,7 @@ class SaveBackupManager:
             print_warning(f"Cleaning up {len(backups_to_delete)} old backup(s)...")
             for backup_path in backups_to_delete:
                 try:
-                    shutil.rmtree(backup_path)
+                    self._safe_rmtree(backup_path)
                     backup_name = Path(backup_path).name
                     print_info(f"Deleted old backup: {backup_name}")
                 except Exception as e:
@@ -459,8 +479,8 @@ class SaveBackupManager:
                 
                 print_colored(f"{i:2d}. ", Colors.CYAN, bold=True, end="")
                 print_colored(f"{backup_name}", Colors.WHITE, bold=True)
-                print_colored(f"    📅 {formatted_time} ({age_str})", Colors.BLUE)
-                print_colored(f"    📦 Size: {backup_size}{description}", Colors.MAGENTA)
+                print_colored(f"    📅 {formatted_time} ({age_str})", Colors.BLUE, end="")
+                print_colored(f" - {backup_size}{description}", Colors.MAGENTA)
                 
             except ValueError:
                 print_colored(f"{i:2d}. {backup_name}", Colors.WHITE)
@@ -530,16 +550,7 @@ class SaveBackupManager:
                 if item.name != "backups" and item != Path(__file__):
                     try:
                         if item.is_dir():
-                            # Handle read-only directories and files on Windows
-                            def handle_remove_readonly(func, path, exc):
-                                """Error handler for Windows read-only files"""
-                                if exc[1].errno == 13:  # Permission denied
-                                    os.chmod(path, 0o777)
-                                    func(path)
-                                else:
-                                    raise
-                            
-                            shutil.rmtree(item, onerror=handle_remove_readonly)
+                            self._safe_rmtree(item)
                         else:
                             # Handle read-only files
                             if not os.access(item, os.W_OK):
@@ -632,7 +643,7 @@ class SaveBackupManager:
             return False
         
         try:
-            shutil.rmtree(backup_path)
+            self._safe_rmtree(backup_path)
             print_success(f"Backup '{backup_name}' deleted successfully!")
             return True
         except Exception as e:
@@ -659,7 +670,7 @@ class SaveBackupManager:
         
         for backup_path in backups_to_delete:
             try:
-                shutil.rmtree(backup_path)
+                self._safe_rmtree(backup_path)
                 backup_name = Path(backup_path).name
                 print_success(f"Deleted: {backup_name}")
             except Exception as e:
