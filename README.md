@@ -5,13 +5,10 @@ A comprehensive command-line tool for backing up, restoring, and managing game s
 ## ✨ Features
 
 - **🎮 Multi-Game Support**: Configure and manage multiple games with individual settings
-- **💾 Automated Backups**: Create timestamped backups with optional descriptions
 - **🔄 Easy Restoration**: Restore any backup with a simple menu interface
 - **🧹 Intelligent Cleanup**: Automatically manage backup storage with configurable limits
-- **📊 Progress Tracking**: Visual progress bars for backup and restore operations
 - **🎨 Colorful Interface**: Beautiful terminal output with emojis and colors
 - **⚙️ Flexible Configuration**: JSON-based configuration with hot-reloading
-- **🛡️ Safety Features**: Pre-restore safety backups and error handling
 - **📝 Backup Descriptions**: Add descriptive notes to your backups
 - **📊 Size Reporting**: Track backup sizes and save directory information
 
