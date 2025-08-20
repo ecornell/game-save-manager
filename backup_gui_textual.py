@@ -265,6 +265,16 @@ class BackupManagerApp(App):
         border: solid $primary;
         background: $surface;
     }
+    
+    .game-selection-row {
+        height: 3;
+        align: left middle;
+    }
+    
+    .game-label {
+        width: 8;
+        margin: 0 1 0 0;
+    }
     """
     
     BINDINGS = [
@@ -295,12 +305,15 @@ class BackupManagerApp(App):
                 yield Vertical(
                     # Game Selection Section
                     Static("🎮 Game Selection", classes="section-header"),
-                    Label("Select Game:"),
-                    Select(
-                        options=[("No games configured", None)],
-                        prompt="Choose a game...",
-                        id="game_select",
-                        allow_blank=True
+                    Horizontal(
+                        Label("Game:", classes="game-label"),
+                        Select(
+                            options=[("No games configured", None)],
+                            prompt="Choose a game...",
+                            id="game_select",
+                            allow_blank=True
+                        ),
+                        classes="game-selection-row"
                     ),
                     Static("", id="game_info"),
                     
@@ -397,8 +410,11 @@ class BackupManagerApp(App):
                       for game_id, game_info in games]
             select.set_options(options)
             
-            # Select first game if none selected
-            if not select.value and options:
+            # Try to select the last selected game, or first game if none remembered
+            last_game = self.get_last_selected_game()
+            if last_game and last_game in [game_id for _, game_id in options]:
+                select.value = last_game
+            elif not select.value and options:
                 select.value = options[0][1]
         else:
             # No games configured
@@ -411,6 +427,10 @@ class BackupManagerApp(App):
         if event.value and event.value != None:  # Check for valid game selection
             self.current_game_id = event.value
             self.current_game_info = self.config.get("games", {}).get(event.value)
+            
+            # Save the last selected game to configuration
+            self.save_last_selected_game(str(event.value))
+            
             self.update_game_info()
             self.initialize_backup_manager()
             self.refresh_backup_list()
@@ -424,23 +444,35 @@ class BackupManagerApp(App):
             table = self.query_one("#backup_table", DataTable)
             table.clear()
     
+    def save_last_selected_game(self, game_id: str):
+        """Save the last selected game to configuration."""
+        try:
+            if "settings" not in self.config:
+                self.config["settings"] = {}
+            
+            self.config["settings"]["last_selected_game"] = game_id
+            save_games_config(self.config_path, self.config)
+        except Exception as e:
+            # Don't show error to user, just log it silently
+            pass
+    
+    def get_last_selected_game(self) -> str | None:
+        """Get the last selected game from configuration."""
+        return self.config.get("settings", {}).get("last_selected_game")
+    
     def update_game_info(self):
         """Update the game information display."""
         info_widget = self.query_one("#game_info", Static)
         
         if not self.current_game_info:
-            info_widget.update("No game selected")
+            info_widget.update("")
             return
         
-        name = self.current_game_info.get("name", "Unknown")
         save_path = self.current_game_info.get("save_path", "Not set")
         backup_path = self.current_game_info.get("backup_path", "Default")
-        description = self.current_game_info.get("description", "No description")
         
-        info_text = f"""[bold]Name:[/bold] {name}
-[bold]Save Path:[/bold] {save_path}
-[bold]Backup Path:[/bold] {backup_path}
-[bold]Description:[/bold] {description}"""
+        info_text = f"""[bold]Save Path:[/bold] {save_path}
+[bold]Backup Path:[/bold] {backup_path}"""
         
         info_widget.update(info_text)
     
