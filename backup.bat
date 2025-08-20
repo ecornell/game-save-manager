@@ -1,1 +1,1 @@
-uv run "C:\Util\save-backups\backup.py" 
+uv run ".\backup.py" 
