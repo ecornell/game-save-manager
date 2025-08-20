@@ -41,6 +41,11 @@ from backup import (
 class ConfirmDialog(ModalScreen[bool]):
     """A modal confirmation dialog."""
     
+    BINDINGS = [
+        ("r", "confirm", "Confirm"),
+        ("escape", "cancel", "Cancel"),
+    ]
+    
     def __init__(self, title: str, message: str, confirm_text: str = "Yes", cancel_text: str = "No"):
         super().__init__()
         self.title = title
@@ -66,6 +71,14 @@ class ConfirmDialog(ModalScreen[bool]):
     
     @on(Button.Pressed, "#cancel") 
     def on_cancel(self):
+        self.dismiss(False)
+    
+    def action_confirm(self):
+        """Confirm action via keyboard shortcut."""
+        self.dismiss(True)
+    
+    def action_cancel(self):
+        """Cancel action via keyboard shortcut."""
         self.dismiss(False)
 
 
