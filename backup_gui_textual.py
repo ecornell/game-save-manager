@@ -221,6 +221,19 @@ class BackupManagerApp(App):
         margin: 0 1 0 0;
     }
     
+    .backup-buttons-split {
+        height: 3;
+        align: left middle;
+    }
+    
+    .backup-buttons-split Button {
+        margin: 0 1 0 0;
+    }
+    
+    .backup-buttons-split Static {
+        width: 1fr;  /* This will expand to fill available space */
+    }
+    
     .setting-row {
         height: 3;
         align: left middle;
@@ -282,6 +295,16 @@ class BackupManagerApp(App):
         Binding("r", "refresh", "Refresh"),
         Binding("c", "create_backup", "Create Backup"),
         Binding("d", "delete_backup", "Delete Backup"),
+        Binding("1", "select_backup(1)", "Select Backup 1", show=False),
+        Binding("2", "select_backup(2)", "Select Backup 2", show=False),
+        Binding("3", "select_backup(3)", "Select Backup 3", show=False),
+        Binding("4", "select_backup(4)", "Select Backup 4", show=False),
+        Binding("5", "select_backup(5)", "Select Backup 5", show=False),
+        Binding("6", "select_backup(6)", "Select Backup 6", show=False),
+        Binding("7", "select_backup(7)", "Select Backup 7", show=False),
+        Binding("8", "select_backup(8)", "Select Backup 8", show=False),
+        Binding("9", "select_backup(9)", "Select Backup 9", show=False),
+        Binding("0", "select_backup(10)", "Select Backup 10", show=False),
     ]
     
     def __init__(self):
@@ -332,9 +355,10 @@ class BackupManagerApp(App):
                     DataTable(id="backup_table"),
                     Horizontal(
                         Button("🔄 Restore Selected", variant="warning", id="restore_backup"),
-                        Button("X Delete Selected", variant="error", id="delete_backup"),
+                        Static(""),  # Spacer to push right buttons to the right
+                        Button("x Delete Selected", variant="error", id="delete_backup"),
                         Button("🧹 Cleanup Old Backups", variant="primary", id="cleanup_backups"),
-                        classes="backup-buttons"
+                        classes="backup-buttons-split"
                     ),
                     ProgressBar(total=100, show_eta=True, id="progress_bar"),
                     Static("", id="progress_label"),
@@ -384,7 +408,7 @@ class BackupManagerApp(App):
         """Initialize the application on mount."""
         # Setup table columns
         backup_table = self.query_one("#backup_table", DataTable)
-        backup_table.add_columns("Backup Name", "Date", "Time", "Age", "Size", "Description")
+        backup_table.add_columns("#", "Backup Name", "Date", "Time", "Age", "Size", "Description")
         backup_table.cursor_type = "row"
         
         games_table = self.query_one("#games_table", DataTable)
@@ -516,9 +540,15 @@ class BackupManagerApp(App):
         try:
             backups = self.manager._get_backup_list()
             
-            for backup_path in backups:
+            for index, backup_path in enumerate(backups):
                 backup_path_obj = Path(backup_path)
                 backup_name = backup_path_obj.name
+                
+                # Add position number for first 9 backups in separate column
+                if index < 10:
+                    position = str(index + 1)
+                else:
+                    position = ""
                 
                 # Parse timestamp from backup name
                 try:
@@ -560,7 +590,7 @@ class BackupManagerApp(App):
                         pass
                 
                 # Add row to table
-                table.add_row(backup_name, date_str, time_str, age_str, size_str, description)
+                table.add_row(position, backup_name, date_str, time_str, age_str, size_str, description)
         
         except Exception as e:
             self.notify(f"Failed to refresh backup list: {e}", severity="error")
@@ -621,7 +651,7 @@ class BackupManagerApp(App):
         
         # Get selected backup name
         row_key = table.get_row_at(table.cursor_row)
-        backup_name = row_key[0]
+        backup_name = row_key[1]  # Backup name is now in column 1 (second column)
         
         # Show confirmation dialog
         def handle_restore_confirmation(confirmed: bool | None):
@@ -687,7 +717,7 @@ class BackupManagerApp(App):
         
         # Get selected backup name
         row_key = table.get_row_at(table.cursor_row)
-        backup_name = row_key[0]
+        backup_name = row_key[1]  # Backup name is now in column 1 (second column)
         
         # Show confirmation dialog
         def handle_delete_confirmation(confirmed: bool | None):
@@ -952,6 +982,28 @@ class BackupManagerApp(App):
         progress_bar.display = False
         progress_label.display = False
     
+    def action_select_backup(self, backup_number: int):
+        """Select a backup by number (1-9)."""
+        try:
+            table = self.query_one("#backup_table", DataTable)
+            
+            # Check if the backup exists (backup_number is 1-indexed)
+            if backup_number > len(table.rows) or backup_number < 1:
+                return  # Ignore if backup number doesn't exist
+            
+            # Convert to 0-indexed for table cursor
+            row_index = backup_number - 1
+            
+            # Move cursor to the specified row
+            table.move_cursor(row=row_index, column=0)
+            
+            # Show a brief notification
+            self.notify(f"Selected backup #{backup_number}", timeout=1.0)
+            
+        except Exception:
+            # Silently ignore errors (table might not be ready)
+            pass
+
     def action_refresh(self):
         """Refresh current view."""
         self.refresh_backup_list()
