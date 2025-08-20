@@ -206,8 +206,10 @@ class BackupManagerApp(App):
     .section-header {
         text-style: bold;
         color: $primary;
+        background: $panel-darken-1;
         margin: 1 0 0 0;
-        padding: 0 0 1 0;
+        padding: 0 0 0 0;
+        border-top: solid $primary;
         border-bottom: solid $primary;
     }
     
@@ -275,7 +277,7 @@ class BackupManagerApp(App):
     #game_info {
         margin: 1 0;
         padding: 1;
-        border: solid $primary;
+        # border: solid $primary;
         background: $surface;
     }
     
@@ -292,9 +294,9 @@ class BackupManagerApp(App):
     
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("r", "refresh", "Refresh"),
+        Binding("r", "restore_backup", "Restore Selected"),
         Binding("c", "create_backup", "Create Backup"),
-        Binding("d", "delete_backup", "Delete Backup"),
+        # Binding("d", "delete_backup", "Delete Backup"),
         Binding("1", "select_backup(1)", "Select Backup 1", show=False),
         Binding("2", "select_backup(2)", "Select Backup 2", show=False),
         Binding("3", "select_backup(3)", "Select Backup 3", show=False),
@@ -346,7 +348,7 @@ class BackupManagerApp(App):
                     Input(placeholder="Enter backup description...", id="backup_description"),
                     Horizontal(
                         Button("💾 Create Backup", variant="success", id="create_backup"),
-                        Button("🔄 Refresh", variant="default", id="refresh_backups"),
+                        
                         classes="action-buttons"
                     ),
                     
@@ -356,8 +358,9 @@ class BackupManagerApp(App):
                     Horizontal(
                         Button("🔄 Restore Selected", variant="warning", id="restore_backup"),
                         Static(""),  # Spacer to push right buttons to the right
-                        Button("x Delete Selected", variant="error", id="delete_backup"),
+                        Button("🔄 Refresh", variant="primary", id="refresh_backups"),                        
                         Button("🧹 Cleanup Old Backups", variant="primary", id="cleanup_backups"),
+                        Button("x Delete Selected", variant="error", id="delete_backup"),
                         classes="backup-buttons-split"
                     ),
                     ProgressBar(total=100, show_eta=True, id="progress_bar"),
@@ -372,7 +375,7 @@ class BackupManagerApp(App):
                     DataTable(id="games_table"),
                     Horizontal(
                         Button("➕ Add Game", variant="success", id="add_game"),
-                        Button("✏️ Edit Selected", variant="primary", id="edit_game"),
+                        Button("✎ Edit Selected", variant="primary", id="edit_game"),
                         Button("X Remove Selected", variant="error", id="remove_game"),
                         Button("🔄 Refresh", variant="default", id="refresh_games"),
                         classes="config-buttons"
@@ -1015,6 +1018,10 @@ class BackupManagerApp(App):
     def action_delete_backup(self):
         """Delete backup via keyboard shortcut."""
         self.on_delete_backup()
+    
+    def action_restore_backup(self):
+        """Restore backup via keyboard shortcut."""
+        self.on_restore_backup()
 
 
 def main():
