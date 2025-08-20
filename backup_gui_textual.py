@@ -607,9 +607,25 @@ class BackupManagerApp(App):
                 
                 # Add row to table
                 table.add_row(position, backup_name, date_str, time_str, age_str, size_str, description)
+            
+            # Set focus to first backup if available
+            if len(backups) > 0:
+                # Use call_after_refresh to ensure the table is fully rendered
+                self.call_after_refresh(self._set_backup_focus)
         
         except Exception as e:
             self.notify(f"Failed to refresh backup list: {e}", severity="error")
+    
+    def _set_backup_focus(self):
+        """Set focus to the first backup in the table."""
+        try:
+            table = self.query_one("#backup_table", DataTable)
+            if table.row_count > 0:
+                table.move_cursor(row=0, column=0)
+                table.focus()
+        except Exception:
+            # Silently ignore if table isn't ready
+            pass
     
     @on(Button.Pressed, "#create_backup")
     def on_create_backup(self):
