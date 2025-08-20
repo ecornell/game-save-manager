@@ -180,10 +180,18 @@ class BackupManagerApp(App):
     """Main Textual application for backup management."""
     
     CSS = """
+    ConfirmDialog {
+        align: center middle;
+    }
+    
+    GameConfigDialog {
+        align: center middle;
+    }
+    
     .dialog {
         width: 60;
         height: auto;
-        border: thick $background 80%;
+        border: thick $primary 80%;
         background: $surface;
         margin: 2;
         padding: 1;
@@ -410,7 +418,7 @@ class BackupManagerApp(App):
                         Label("Default Backup Path:"),
                         Input(
                             placeholder="Leave empty for default",
-                            id="backup_path"
+                            id="backup_path",                                                        
                         ),
                         classes="setting-row"
                     ),
