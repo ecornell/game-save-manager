@@ -44,6 +44,8 @@ class ConfirmDialog(ModalScreen[bool]):
     BINDINGS = [
         ("r", "confirm", "Confirm"),
         ("escape", "cancel", "Cancel"),
+        ("left", "focus_cancel", "Focus Cancel"),
+        ("right", "focus_confirm", "Focus Confirm"),
     ]
     
     def __init__(self, title: str, message: str, confirm_text: str = "Yes", cancel_text: str = "No"):
@@ -80,6 +82,22 @@ class ConfirmDialog(ModalScreen[bool]):
     def action_cancel(self):
         """Cancel action via keyboard shortcut."""
         self.dismiss(False)
+    
+    def action_focus_cancel(self):
+        """Focus the cancel button."""
+        try:
+            cancel_button = self.query_one("#cancel", Button)
+            cancel_button.focus()
+        except Exception:
+            pass
+    
+    def action_focus_confirm(self):
+        """Focus the confirm button."""
+        try:
+            confirm_button = self.query_one("#confirm", Button)
+            confirm_button.focus()
+        except Exception:
+            pass
 
 
 class GameConfigDialog(ModalScreen[Optional[tuple]]):
@@ -317,7 +335,7 @@ class BackupManagerApp(App):
         Binding("q", "quit", "Quit"),
         Binding("r", "restore_backup", "Restore Selected"),
         Binding("c", "create_backup", "Create Backup"),
-        # Binding("d", "delete_backup", "Delete Backup"),
+        Binding("x", "delete_backup", "Delete Backup"),
         Binding("1", "select_backup(1)", "Select Backup 1", show=False),
         Binding("2", "select_backup(2)", "Select Backup 2", show=False),
         Binding("3", "select_backup(3)", "Select Backup 3", show=False),
@@ -332,8 +350,8 @@ class BackupManagerApp(App):
     
     def __init__(self):
         super().__init__()
-        self.title = "🎮 Save Game Backup Manager"
-        self.sub_title = "Terminal UI for managing game save backups"
+        self.title = "🎮 Save Game Backup Manager 🎮 "
+        self.sub_title = ""
         
         # Load configuration
         self.config_path = Path(__file__).parent / "games_config.json"
@@ -352,7 +370,7 @@ class BackupManagerApp(App):
                     # Game Selection Section
                     Static("🎮 Game Selection", classes="section-header"),
                     Horizontal(
-                        Label("Game:", classes="game-label"),
+                        Label("\nGame:", classes="game-label"),
                         Select(
                             options=[("No games configured", None)],
                             prompt="Choose a game...",
