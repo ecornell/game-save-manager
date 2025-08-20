@@ -487,7 +487,7 @@ class SaveBackupManager:
         
         return backups
     
-    def restore_backup(self, backup_choice: Optional[int] = None) -> bool:
+    def restore_backup(self, backup_choice: Optional[int] = None, skip_confirmation: bool = False) -> bool:
         """Restore a backup to the save directory"""
         backups = self._get_backup_list()
         
@@ -532,12 +532,13 @@ class SaveBackupManager:
             except Exception:
                 pass
         
-        # Confirm restoration
-        print_warning("This will overwrite your current save files!")
-        confirm = input(f"\n{Colors.YELLOW}Are you sure you want to restore '{backup_name}'? (y/N): {Colors.END}")
-        if confirm.lower() != 'y':
-            print_info("Restoration cancelled.")
-            return False
+        # Confirm restoration (skip if requested)
+        if not skip_confirmation:
+            print_warning("This will overwrite your current save files!")
+            confirm = input(f"\n{Colors.YELLOW}Are you sure you want to restore '{backup_name}'? (y/N): {Colors.END}")
+            if confirm.lower() != 'y':
+                print_info("Restoration cancelled.")
+                return False
         
         try:
             # Create a backup of current state before restoring
@@ -600,7 +601,7 @@ class SaveBackupManager:
             print_error(f"Failed to restore backup: {e}")
             return False
     
-    def delete_backup(self, backup_choice: Optional[int] = None) -> bool:
+    def delete_backup(self, backup_choice: Optional[int] = None, skip_confirmation: bool = False) -> bool:
         """Delete a specific backup"""
         backups = self._get_backup_list()
         
@@ -636,11 +637,12 @@ class SaveBackupManager:
         print_header("Delete Backup")
         print_warning(f"Selected backup: {backup_name}")
         
-        # Confirm deletion
-        confirm = input(f"\n{Colors.RED}Are you sure you want to permanently delete '{backup_name}'? (y/N): {Colors.END}")
-        if confirm.lower() != 'y':
-            print_info("Deletion cancelled.")
-            return False
+        # Confirm deletion (skip if requested)
+        if not skip_confirmation:
+            confirm = input(f"\n{Colors.RED}Are you sure you want to permanently delete '{backup_name}'? (y/N): {Colors.END}")
+            if confirm.lower() != 'y':
+                print_info("Deletion cancelled.")
+                return False
         
         try:
             self._safe_rmtree(backup_path)
