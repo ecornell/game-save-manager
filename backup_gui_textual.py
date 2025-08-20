@@ -333,6 +333,13 @@ class BackupManagerApp(App):
     .backup-desc-label {
         margin: 0 1 0 1;
     }
+
+    ToastRack {
+        dock: top;
+        align: right top;
+        layer: overlay;
+        offset: 1 1;
+    }
     """
     
     BINDINGS = [
@@ -1026,15 +1033,15 @@ class BackupManagerApp(App):
     
     def show_progress(self, message: str):
         """Show progress bar with message."""
-        progress_bar = self.query_one("#progress_bar", ProgressBar)
-        progress_label = self.query_one("#progress_label", Static)
+        # progress_bar = self.query_one("#progress_bar", ProgressBar)
+        # progress_label = self.query_one("#progress_label", Static)
         
-        progress_bar.display = True
-        progress_label.display = True
-        progress_label.update(message)
+        # progress_bar.display = True
+        # progress_label.display = True
+        # progress_label.update(message)
         
         # Set indeterminate progress
-        progress_bar.advance(0)
+        # progress_bar.advance(0)
     
     def hide_progress(self):
         """Hide progress bar."""
