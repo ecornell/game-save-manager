@@ -248,8 +248,8 @@ class BackupManagerApp(App):
         background: $panel-darken-1;
         margin: 1 0 0 0;
         padding: 0 0 0 0;
-        border-top: solid $primary;
-        border-bottom: solid $primary;
+        # border-top: solid $primary;
+        # border-bottom: solid $primary;
     }
     
     .action-buttons, .backup-buttons, .config-buttons {
@@ -297,6 +297,7 @@ class BackupManagerApp(App):
     
     Input {
         margin: 0 0 1 0;
+        # height: 3;
     }
     
     TextArea {
@@ -314,7 +315,7 @@ class BackupManagerApp(App):
     }
     
     #game_info {
-        margin: 1 1 1 11;
+        margin: 0 1 1 11;
         padding: 1 0 1 2;
         # border: solid $primary;
         background: $surface;
@@ -332,6 +333,32 @@ class BackupManagerApp(App):
 
     .backup-desc-label {
         margin: 0 1 0 1;
+    }
+
+    .backup-actions-container {
+        height: 4;
+    }
+
+    .backup-desc-container {
+        width: 1fr;
+        # height: 5;
+        margin: 0 0 0 1;
+        padding: 0 1;
+    }
+
+    .backup-desc-container Label {
+        height: 1;
+        margin: 0 0 0 0;
+    }
+
+    .backup-desc-container Input {
+        margin: 0 0 0 0;
+        height: 3;
+    }
+
+    #create_backup {
+        margin: 0 0 0 0;
+        # padding: 2 2;
     }
 
     ToastRack {
@@ -394,12 +421,14 @@ class BackupManagerApp(App):
                     
                     # Backup Actions Section  
                     Static("📁 Backup Actions", classes="section-header"),
-                    Label("Backup Description (optional):", classes="backup-desc-label"),
-                    Input(placeholder="Enter backup description...", id="backup_description"),
                     Horizontal(
-                        Button("💾 Create Backup", variant="success", id="create_backup"),
-                        
-                        classes="action-buttons"
+                        Button("💾 Create Backup", variant="success", id="create_backup", classes="action-buttons"),
+                        Vertical(
+                            # Label("Backup Description (optional):", classes="backup-desc-label"),
+                            Input(placeholder="Enter backup description (optional)...", id="backup_description"),
+                            classes="backup-desc-container"
+                        ),
+                        classes="backup-actions-container"
                     ),
                     
                     # Backup List Section
