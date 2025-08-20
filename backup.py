@@ -96,12 +96,14 @@ def load_games_config(config_path: Path) -> Dict[str, Any]:
                     "example_game": {
                         "name": "Example Game",
                         "save_path": "C:\\Users\\{username}\\Documents\\Example Game\\Saves",
+                        "backup_path": "C:\\Users\\{username}\\Documents\\Example Game\\Backups",
                         "description": "Example game configuration"
                     }
                 },
                 "settings": {
                     "default_max_backups": 10,
-                    "auto_expand_paths": True
+                    "auto_expand_paths": True,
+                    "default_backup_path": "./backups"
                 }
             }
             save_games_config(config_path, default_config)
@@ -146,11 +148,14 @@ def select_game(config: Dict[str, Any]) -> Optional[tuple]:
     for i, (game_id, game_info) in enumerate(games, 1):
         name = game_info.get("name", game_id)
         save_path = game_info.get("save_path", "Unknown")
+        backup_path = game_info.get("backup_path", "")
         description = game_info.get("description", "")
         
         print_colored(f"{i:2d}. ", Colors.CYAN, bold=True, end="")
         print_colored(f"{name}", Colors.WHITE, bold=True)
-        print_colored(f"    📁 {save_path}", Colors.BLUE)
+        print_colored(f"    📁 Save: {save_path}", Colors.BLUE)
+        if backup_path:
+            print_colored(f"    💾 Backup: {backup_path}", Colors.GREEN)
         if description:
             print_colored(f"    📝 {description}", Colors.MAGENTA)
     
@@ -192,6 +197,8 @@ def add_game_to_config(config_path: Path, config: Dict[str, Any]):
         print_error("Save path is required.")
         return
     
+    backup_path = get_user_input_with_prompt("Backup directory path (optional)")
+    
     description = get_user_input_with_prompt("Description (optional)")
     
     # Validate path exists (after expansion)
@@ -210,6 +217,7 @@ def add_game_to_config(config_path: Path, config: Dict[str, Any]):
     config["games"][game_id] = {
         "name": name,
         "save_path": save_path,
+        "backup_path": backup_path,
         "description": description
     }
     
@@ -247,12 +255,14 @@ def edit_game_config(config_path: Path, config: Dict[str, Any]):
         # Edit fields
         new_name = get_user_input_with_prompt("Game name", game_info.get("name"))
         new_path = get_user_input_with_prompt("Save directory path", game_info.get("save_path"))
+        new_backup_path = get_user_input_with_prompt("Backup directory path", game_info.get("backup_path", ""))
         new_desc = get_user_input_with_prompt("Description", game_info.get("description", ""))
         
         # Update config
         config["games"][game_id].update({
             "name": new_name,
             "save_path": new_path,
+            "backup_path": new_backup_path,
             "description": new_desc
         })
         
@@ -511,17 +521,42 @@ class SaveBackupManager:
         
         try:
             # Create a backup of current state before restoring
-            print_info("Creating safety backup of current state...")
-            current_backup = self.create_backup("Pre-restore safety backup")
+            #print_info("Creating safety backup of current state...")
+            #current_backup = self.create_backup("Pre-restore safety backup")
             
             # Remove current save files (except backup folder)
             print_info("Removing current save files...")
             for item in self.save_dir.iterdir():
                 if item.name != "backups" and item != Path(__file__):
-                    if item.is_dir():
-                        shutil.rmtree(item)
-                    else:
-                        item.unlink()
+                    try:
+                        if item.is_dir():
+                            # Handle read-only directories and files on Windows
+                            def handle_remove_readonly(func, path, exc):
+                                """Error handler for Windows read-only files"""
+                                if exc[1].errno == 13:  # Permission denied
+                                    os.chmod(path, 0o777)
+                                    func(path)
+                                else:
+                                    raise
+                            
+                            shutil.rmtree(item, onerror=handle_remove_readonly)
+                        else:
+                            # Handle read-only files
+                            if not os.access(item, os.W_OK):
+                                os.chmod(item, 0o777)
+                            item.unlink()
+                    except PermissionError as e:
+                        print_warning(f"Could not remove {item.name}: {e}")
+                        print_info("Trying alternative removal method...")
+                        try:
+                            # Try using system command as fallback
+                            if item.is_dir():
+                                subprocess.run(['rmdir', '/s', '/q', str(item)], shell=True, check=False)
+                            else:
+                                subprocess.run(['del', '/f', '/q', str(item)], shell=True, check=False)
+                        except Exception as fallback_error:
+                            print_error(f"Failed to remove {item.name}: {fallback_error}")
+                            return False
             
             # Copy backup contents to save directory
             print_info("Restoring backup files...")
@@ -546,8 +581,8 @@ class SaveBackupManager:
             
             print()  # New line after progress bar
             print_success(f"Backup '{backup_name}' restored successfully!")
-            if current_backup:
-                print_info(f"Previous state backed up as: {current_backup.name}")
+            #if current_backup:
+            #    print_info(f"Previous state backed up as: {current_backup.name}")
             return True
             
         except Exception as e:
@@ -743,10 +778,13 @@ Examples:
                     for i, (game_id, game_info) in enumerate(games, 1):
                         name = game_info.get("name", game_id)
                         save_path = game_info.get("save_path", "Unknown")
+                        backup_path = game_info.get("backup_path", "")
                         description = game_info.get("description", "")
                         
                         print_colored(f"{i:2d}. {name} (ID: {game_id})", Colors.WHITE, bold=True)
-                        print_colored(f"    📁 {save_path}", Colors.BLUE)
+                        print_colored(f"    📁 Save: {save_path}", Colors.BLUE)
+                        if backup_path:
+                            print_colored(f"    💾 Backup: {backup_path}", Colors.GREEN)
                         if description:
                             print_colored(f"    📝 {description}", Colors.MAGENTA)
                 else:
@@ -773,6 +811,7 @@ Examples:
     
     # Determine save directory and game info
     save_dir = args.save_dir
+    backup_dir = args.backup_dir
     game_name = None
     max_backups = args.max_backups or config.get("settings", {}).get("default_max_backups", 10)
     
@@ -782,6 +821,9 @@ Examples:
         if game_info:
             save_dir = expand_path(game_info["save_path"])
             game_name = game_info["name"]
+            # Use backup path from config if not specified in command line
+            if not backup_dir and "backup_path" in game_info and game_info["backup_path"]:
+                backup_dir = expand_path(game_info["backup_path"])
             print_success(f"Using configured game: {game_name}")
         else:
             print_error(f"Game '{args.game}' not found in config.")
@@ -793,9 +835,18 @@ Examples:
             game_id, game_info = selected
             save_dir = expand_path(game_info["save_path"])
             game_name = game_info["name"]
+            # Use backup path from config if not specified in command line
+            if not backup_dir and "backup_path" in game_info and game_info["backup_path"]:
+                backup_dir = expand_path(game_info["backup_path"])
             print_success(f"Selected game: {game_name}")
         else:
             print_info("No game selected, using current directory.")
+    
+    # If no backup_dir set yet, try default from settings
+    if not backup_dir:
+        default_backup_path = config.get("settings", {}).get("default_backup_path")
+        if default_backup_path:
+            backup_dir = expand_path(default_backup_path)
     
     # Validate save directory exists
     if save_dir and not os.path.exists(save_dir):
@@ -804,7 +855,7 @@ Examples:
     
     # Initialize backup manager
     try:
-        manager = SaveBackupManager(save_dir, args.backup_dir, max_backups, game_name)
+        manager = SaveBackupManager(save_dir, backup_dir, max_backups, game_name)
     except Exception as e:
         print_error(f"Failed to initialize backup manager: {e}")
         sys.exit(1)
@@ -826,7 +877,8 @@ Examples:
             while True:
                 print_header("Main Menu")
                 if game_name:
-                    print_colored(f"🎮 Current Game: {game_name}\n", Colors.CYAN, bold=True)
+                    print_colored(f"🎮 Current Game: ", Colors.CYAN, bold=True, end="")
+                    print_colored(f"{game_name}\n", Colors.WHITE, bold=True)
                 print_colored("1. 💾 Create backup", Colors.GREEN)
                 print_colored("2. 📋 List backups", Colors.BLUE)
                 print_colored("3. 🔄 Restore backup", Colors.YELLOW)
@@ -861,9 +913,17 @@ Examples:
                             game_id, game_info = selected
                             new_save_dir = expand_path(game_info["save_path"])
                             new_game_name = game_info["name"]
+                            # Determine new backup directory
+                            new_backup_dir = args.backup_dir
+                            if not new_backup_dir and "backup_path" in game_info and game_info["backup_path"]:
+                                new_backup_dir = expand_path(game_info["backup_path"])
+                            elif not new_backup_dir:
+                                default_backup_path = config.get("settings", {}).get("default_backup_path")
+                                if default_backup_path:
+                                    new_backup_dir = expand_path(default_backup_path)
                             
                             if os.path.exists(new_save_dir):
-                                manager = SaveBackupManager(new_save_dir, args.backup_dir, max_backups, new_game_name)
+                                manager = SaveBackupManager(new_save_dir, new_backup_dir, max_backups, new_game_name)
                                 print_success(f"Switched to: {new_game_name}")
                             else:
                                 print_error(f"Save directory does not exist: {new_save_dir}")
@@ -887,10 +947,13 @@ Examples:
                                     for i, (game_id, game_info) in enumerate(games, 1):
                                         name = game_info.get("name", game_id)
                                         save_path = game_info.get("save_path", "Unknown")
+                                        backup_path = game_info.get("backup_path", "")
                                         description = game_info.get("description", "")
                                         
                                         print_colored(f"{i:2d}. {name} (ID: {game_id})", Colors.WHITE, bold=True)
-                                        print_colored(f"    📁 {save_path}", Colors.BLUE)
+                                        print_colored(f"    📁 Save: {save_path}", Colors.BLUE)
+                                        if backup_path:
+                                            print_colored(f"    💾 Backup: {backup_path}", Colors.GREEN)
                                         if description:
                                             print_colored(f"    📝 {description}", Colors.MAGENTA)
                                 else:
