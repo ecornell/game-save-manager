@@ -18,7 +18,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import (
     Header, Footer, Button, Select, Static, Input, TextArea, 
-    DataTable, Label, ProgressBar,
+    DataTable, Label,
     TabbedContent, TabPane
 )
 from textual.binding import Binding
@@ -273,8 +273,6 @@ class BackupManagerApp(App):
                         Button("x Delete Selected", variant="error", id="delete_backup"),
                         classes="backup-buttons-split"
                     ),
-                    ProgressBar(total=100, show_eta=True, id="progress_bar"),
-                    Static("", id="progress_label"),
                     
                     classes="backup-tab"
                 )
@@ -321,17 +319,13 @@ class BackupManagerApp(App):
         """Initialize the application on mount."""
         # Setup table columns
         backup_table = self.query_one("#backup_table", DataTable)
-        backup_table.add_columns("#", "Backup Name", "Date", "Time", "Age", "Size", "Description")
+        backup_table.add_columns("Backup Name", "Date", "Time", "Age", "Size", "Description")
         backup_table.cursor_type = "row"
         
         games_table = self.query_one("#games_table", DataTable)
         games_table.add_columns("Game ID", "Name", "Save Path", "Backup Path", "Description")
         games_table.cursor_type = "row"
-        
-        # Hide progress bar initially
-        self.query_one("#progress_bar", ProgressBar).display = False
-        self.query_one("#progress_label", Static).display = False
-        
+    
         # Load data
         self.update_game_list()
         self.update_games_table()
@@ -455,10 +449,8 @@ class BackupManagerApp(App):
             
             for index, backup_path in enumerate(backups):
                 backup_path_obj = Path(backup_path)
-                backup_name = backup_path_obj.name
-                
-               
-                
+                backup_name = backup_path_obj.name            
+                               
                 # Parse timestamp from backup name
                 try:
                     timestamp_str = backup_name.replace("backup_", "")
@@ -541,9 +533,6 @@ class BackupManagerApp(App):
         description_input = self.query_one("#backup_description", Input)
         description = description_input.value.strip() or None
         
-        # Show progress
-        self.show_progress("Creating backup...")
-        
         def backup_worker():
             try:
                 if not self.manager:
@@ -558,7 +547,6 @@ class BackupManagerApp(App):
     
     def on_backup_complete(self, result: bool, description_input: Input):
         """Handle backup completion."""
-        self.hide_progress()
         
         if result:
             self.notify("Backup created successfully!", severity="information")
@@ -569,7 +557,6 @@ class BackupManagerApp(App):
     
     def on_backup_error(self, error: str):
         """Handle backup error."""
-        self.hide_progress()
         self.notify(f"Backup failed: {error}", severity="error")
     
     @on(Button.Pressed, "#restore_backup")
@@ -606,8 +593,6 @@ class BackupManagerApp(App):
     
     def perform_restore(self, backup_name: str, cursor_row: int):
         """Perform the actual restore operation."""
-        # Show progress
-        self.show_progress("Restoring backup...")
         
         def restore_worker():
             try:
@@ -626,8 +611,6 @@ class BackupManagerApp(App):
     
     def on_restore_complete(self, success: bool):
         """Handle restore completion."""
-        self.hide_progress()
-        
         if success:
             self.notify("Backup restored successfully!", severity="information")
         else:
@@ -635,7 +618,6 @@ class BackupManagerApp(App):
     
     def on_restore_error(self, error: str):
         """Handle restore error."""
-        self.hide_progress()
         self.notify(f"Restore failed: {error}", severity="error")
     
     @on(Button.Pressed, "#delete_backup")
@@ -897,26 +879,7 @@ class BackupManagerApp(App):
             self.notify("Invalid value for max backups", severity="error")
         except Exception as e:
             self.notify(f"Failed to save settings: {e}", severity="error")
-    
-    def show_progress(self, message: str):
-        """Show progress bar with message."""
-        # progress_bar = self.query_one("#progress_bar", ProgressBar)
-        # progress_label = self.query_one("#progress_label", Static)
-        
-        # progress_bar.display = True
-        # progress_label.display = True
-        # progress_label.update(message)
-        
-        # Set indeterminate progress
-        # progress_bar.advance(0)
-    
-    def hide_progress(self):
-        """Hide progress bar."""
-        progress_bar = self.query_one("#progress_bar", ProgressBar)
-        progress_label = self.query_one("#progress_label", Static)
-        
-        progress_bar.display = False
-        progress_label.display = False
+
     
     def action_select_backup(self, backup_number: int):
         """Select a backup by number (1-9)."""
