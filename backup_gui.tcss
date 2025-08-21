@@ -46,7 +46,7 @@ GameConfigDialog {
     text-style: bold;
     color: $primary-lighten-2;
     background: $panel-lighten-2;
-    margin: 1 0 0 0;
+    margin: 0 0 0 0;
     padding: 0 0 0 0;
     # border-top: solid $primary;
     # border-bottom: solid $primary;
@@ -65,6 +65,7 @@ GameConfigDialog {
 .backup-buttons-split {
     height: 3;
     align: left middle;
+    margin: 0 1 0 1;
 }
 
 .backup-buttons-split Button {
@@ -123,8 +124,8 @@ ProgressBar {
 }
 
 #game_info {
-    margin: 0 1 1 11;
-    padding: 0 0 1 2;
+    margin: 1 1 1 11;
+    padding: 1 0 1 2;
     # border: solid $primary;
     background: $surface;
 }
@@ -145,6 +146,7 @@ ProgressBar {
 
 .backup-actions-container {
     height: 3;
+    padding: 0 1 0 1;
 }
 
 .backup-desc-container {

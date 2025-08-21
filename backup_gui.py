@@ -261,7 +261,7 @@ class BackupManagerApp(App):
                         ),
                         classes="backup-actions-container"
                     ),
-                    
+                    Static(""),
                     # Backup List Section                    
                     Static("📋 Available Backups", classes="section-header"),
                     DataTable(id="backup_table", zebra_stripes=True),                    
