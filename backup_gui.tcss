@@ -92,7 +92,8 @@ GameConfigDialog {
 
 DataTable {
     height: 1fr;
-    margin: 1 0;
+    # width: 1fr;
+    margin: 1 0 1 0;
 }
 
 Input {

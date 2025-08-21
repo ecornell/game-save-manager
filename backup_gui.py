@@ -9,8 +9,10 @@ import sys
 import threading
 import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Text
 import asyncio
+
+from rich.text import Text
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -196,7 +198,7 @@ class GameConfigDialog(ModalScreen[Optional[tuple]]):
 
 class BackupManagerApp(App):
     """Main Textual application for backup management."""
-    CSS_PATH = "backup_gui_textual.tcss"
+    CSS_PATH = "backup_gui.tcss"
     
     BINDINGS = [
         Binding("q", "quit", "Quit"),
@@ -455,11 +457,7 @@ class BackupManagerApp(App):
                 backup_path_obj = Path(backup_path)
                 backup_name = backup_path_obj.name
                 
-                # Add position number for first 9 backups in separate column
-                if index < 10:
-                    position = str(index + 1)
-                else:
-                    position = ""
+               
                 
                 # Parse timestamp from backup name
                 try:
@@ -499,9 +497,20 @@ class BackupManagerApp(App):
                         description = desc_file.read_text(encoding='utf-8').strip()
                     except Exception:
                         pass
-                
+
+
+                 # Add position number for first 10 backups in separate column
+                if index < 9:
+                    position = str(index + 1)
+                elif index == 9:
+                    position = "0"
+                else:
+                    position = ""
+                label = Text(str(position), style="#B0FC38 italic")  # type: ignore
+
                 # Add row to table
-                table.add_row(position, backup_name, date_str, time_str, age_str, size_str, description)
+                table.add_row(backup_name, date_str, time_str, age_str, size_str, description,
+                              label=label)
             
             # Set focus to first backup if available
             if len(backups) > 0:
