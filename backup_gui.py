@@ -402,8 +402,8 @@ class BackupManagerApp(App):
         save_path = self.current_game_info.get("save_path", "Not set")
         backup_path = self.current_game_info.get("backup_path", "Default")
         
-        info_text = f"""[bold]Save Path:[/bold] {save_path}
-[bold]Backup Path:[/bold] {backup_path}"""
+        info_text = f"""[chartreuse]Save Path   :[/] {save_path}
+[chartreuse]Backup Path :[/] {backup_path}"""
         
         info_widget.update(info_text)
     
