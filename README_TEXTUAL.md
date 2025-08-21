@@ -2,12 +2,7 @@
 
 ## Overview
 
-This is a terminal-based user interface (TUI) version of the Save Game Backup Manager built with [Textual](https://textual.textualize.io/). It provides the same functionality as the tkinter GUI but runs in a terminal environment, making it suitable for:
-
-- Remote servers via SSH
-- Headless systems
-- Users who prefer terminal-based applications
-- Systems where GUI frameworks are not available
+This is a terminal-based user interface (TUI) version of the Save Game Backup Manager built with [Textual](https://textual.textualize.io/). 
 
 ## Features
 
@@ -137,21 +132,6 @@ run_textual_gui.bat
 
 The Textual GUI uses the same configuration file (`games_config.json`) as the other versions. All settings and game configurations are shared between the tkinter GUI, Textual TUI, and CLI versions.
 
-## Advantages of the Textual TUI
-
-### Over tkinter GUI
-- Works over SSH and remote connections
-- Lower resource usage
-- No GUI framework dependencies
-- Consistent appearance across platforms
-- Better for automation and scripting
-
-### Over CLI
-- Interactive interface
-- Visual feedback
-- Mouse support
-- Multiple operations without re-running commands
-- Better for users less comfortable with command-line
 
 ## Requirements
 
@@ -176,23 +156,4 @@ Ensure the application has read/write access to:
 - Backup directories
 - Configuration file location
 
-## Technical Details
 
-The Textual TUI is built using:
-- **Textual Framework**: Modern TUI framework with rich features
-- **Reactive Programming**: Event-driven architecture
-- **Async/Await**: Non-blocking operations for better responsiveness
-- **Modal Dialogs**: Professional confirmation and input dialogs
-- **Threading**: Background operations for backup/restore without blocking UI
-
-## Comparison with Other Versions
-
-| Feature | CLI | tkinter GUI | Textual TUI |
-|---------|-----|-------------|-------------|
-| Remote Access | ✓ | ✗ | ✓ |
-| Mouse Support | ✗ | ✓ | ✓ |
-| Visual Interface | ✗ | ✓ | ✓ |
-| Resource Usage | Low | Medium | Low |
-| Platform Dependencies | None | tkinter | textual |
-| Automation Friendly | ✓ | ✗ | ✓ |
-| SSH Compatible | ✓ | ✗ | ✓ |
