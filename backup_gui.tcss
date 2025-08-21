@@ -86,8 +86,12 @@ GameConfigDialog {
 }
 
 .setting-row Input {
-    width: 30;
+    width: 10;
     margin: 0 1;
+}
+
+#backup_path {
+    width: 80;
 }
 
 #backup_table {
