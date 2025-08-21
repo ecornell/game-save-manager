@@ -251,7 +251,7 @@ class BackupManagerApp(App):
                     Static("", id="game_info"),
                     
                     # Backup Actions Section  
-                    Static("📁 Backup Actions", classes="section-header"),
+                    # Static("📁 Backup Actions", classes="section-header"),
                     Horizontal(
                         Button("💾 Create Backup", variant="success", id="create_backup", classes="action-buttons"),
                         Vertical(

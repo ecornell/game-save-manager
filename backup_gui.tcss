@@ -44,8 +44,8 @@ GameConfigDialog {
 
 .section-header {
     text-style: bold;
-    color: $primary;
-    background: $panel-darken-1;
+    color: $primary-lighten-2;
+    background: $panel-lighten-2;
     margin: 1 0 0 0;
     padding: 0 0 0 0;
     # border-top: solid $primary;
@@ -72,7 +72,7 @@ GameConfigDialog {
 }
 
 .backup-buttons-split Static {
-    width: 1fr;  /* This will expand to fill available space */
+    width: 1fr;
 }
 
 .setting-row {
@@ -90,10 +90,7 @@ GameConfigDialog {
     margin: 0 1;
 }
 
-
 #backup_table {
-    # height: 1fr;
-    # width: auto;
     margin: 0 0 1 0;
 }
 
@@ -105,7 +102,6 @@ DataTable {
 
 Input {
     margin: 0 0 1 0;
-    # height: 3;
 }
 
 TextArea {
@@ -165,7 +161,6 @@ ProgressBar {
 
 #create_backup {
     margin: 0 0 0 0;
-    # padding: 2 2;
 }
 
 ToastRack {
