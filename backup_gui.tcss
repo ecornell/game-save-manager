@@ -90,6 +90,13 @@ GameConfigDialog {
     margin: 0 1;
 }
 
+
+#backup_table {
+    # height: 1fr;
+    # width: auto;
+    margin: 0 0 1 0;
+}
+
 DataTable {
     height: 1fr;
     # width: 1fr;

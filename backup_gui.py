@@ -262,9 +262,9 @@ class BackupManagerApp(App):
                         classes="backup-actions-container"
                     ),
                     
-                    # Backup List Section
+                    # Backup List Section                    
                     Static("📋 Available Backups", classes="section-header"),
-                    DataTable(id="backup_table"),
+                    DataTable(id="backup_table", zebra_stripes=True),                    
                     Horizontal(
                         Button("🔄 Restore Selected", variant="warning", id="restore_backup"),
                         Static(""),  # Spacer to push right buttons to the right
@@ -273,7 +273,7 @@ class BackupManagerApp(App):
                         Button("x Delete Selected", variant="error", id="delete_backup"),
                         classes="backup-buttons-split"
                     ),
-                    
+                    Static(""),
                     classes="backup-tab"
                 )
             with TabPane("⚙️ Configuration", id="config_tab"):
