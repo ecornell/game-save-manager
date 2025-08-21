@@ -253,7 +253,7 @@ class BackupManagerApp(App):
                     # Backup Actions Section  
                     # Static("📁 Backup Actions", classes="section-header"),
                     Horizontal(
-                        Button("💾 Create Backup", variant="success", id="create_backup", classes="action-buttons"),
+                        Button("💾  Create Backup  ", variant="success", id="create_backup", classes="action-buttons"),
                         Vertical(
                             # Label("Backup Description (optional):", classes="backup-desc-label"),
                             Input(placeholder="Enter backup description (optional)...", id="backup_description"),
