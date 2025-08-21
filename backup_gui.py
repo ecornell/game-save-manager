@@ -897,7 +897,7 @@ class BackupManagerApp(App):
             table.move_cursor(row=row_index, column=0)
             
             # Show a brief notification
-            self.notify(f"Selected backup #{backup_number}", timeout=1.0)
+            # self.notify(f"Selected backup #{backup_number}", timeout=1.0)
             
         except Exception:
             # Silently ignore errors (table might not be ready)
