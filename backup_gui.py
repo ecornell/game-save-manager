@@ -309,6 +309,34 @@ class BackupManagerApp(App):
                         ),
                         classes="setting-row"
                     ),
+                    Horizontal(
+                        Label("Skip locked files:"),
+                        Select(
+                            options=[("False", "false"), ("True", "true")],
+                            id="skip_locked",
+                            prompt="Skip locked files?"
+                        ),
+                        classes="setting-row"
+                    ),
+                    Horizontal(
+                        Label("Copy retries:"),
+                        Input(
+                            value="3",
+                            placeholder="3",
+                            id="copy_retries",
+                            validators=[Number(minimum=0, maximum=20)]
+                        ),
+                        classes="setting-row"
+                    ),
+                    Horizontal(
+                        Label("Retry delay (s):"),
+                        Input(
+                            value="0.5",
+                            placeholder="0.5",
+                            id="retry_delay",
+                        ),
+                        classes="setting-row"
+                    ),
                     Button("💾 Save Settings", variant="primary", id="save_settings"),
                     
                     classes="config-tab"
@@ -424,12 +452,20 @@ class BackupManagerApp(App):
             
             # Get max backups setting
             max_backups = self.config.get("settings", {}).get("default_max_backups", 10)
-            
+            # Read locking and retry settings
+            settings = self.config.get("settings", {})
+            skip_locked = settings.get("skip_locked_files", False)
+            copy_retries = settings.get("copy_retries", 3)
+            retry_delay = settings.get("retry_delay", 0.5)
+
             self.manager = SaveBackupManager(
                 save_dir=game_config["save_path"],
                 backup_dir=game_config.get("backup_path"),
                 max_backups=max_backups,
-                game_name=self.current_game_info.get("name")
+                game_name=self.current_game_info.get("name"),
+                skip_locked_files=skip_locked,
+                retries=copy_retries,
+                retry_delay=retry_delay
             )
             
         except Exception as e:
@@ -850,6 +886,17 @@ class BackupManagerApp(App):
         
         backup_path_input = self.query_one("#backup_path", Input)
         backup_path_input.value = settings.get("default_backup_path", "")
+
+        # New settings
+        skip_locked_select = self.query_one("#skip_locked", Select)
+        skip_locked_val = settings.get("skip_locked_files", False)
+        skip_locked_select.value = "true" if skip_locked_val else "false"
+
+        copy_retries_input = self.query_one("#copy_retries", Input)
+        copy_retries_input.value = str(settings.get("copy_retries", 3))
+
+        retry_delay_input = self.query_one("#retry_delay", Input)
+        retry_delay_input.value = str(settings.get("retry_delay", 0.5))
     
     @on(Button.Pressed, "#save_settings")
     def on_save_settings(self):
@@ -860,12 +907,24 @@ class BackupManagerApp(App):
             
             max_backups = int(max_backups_input.value) if max_backups_input.value else 10
             backup_path = backup_path_input.value.strip()
+            # Read new settings
+            skip_locked_select = self.query_one("#skip_locked", Select)
+            skip_locked = True if (skip_locked_select.value == "true") else False
+
+            copy_retries = int(self.query_one("#copy_retries", Input).value or 3)
+            try:
+                retry_delay = float(self.query_one("#retry_delay", Input).value or 0.5)
+            except ValueError:
+                retry_delay = 0.5
             
             if "settings" not in self.config:
                 self.config["settings"] = {}
             
             self.config["settings"]["default_max_backups"] = max_backups
             self.config["settings"]["default_backup_path"] = backup_path
+            self.config["settings"]["skip_locked_files"] = skip_locked
+            self.config["settings"]["copy_retries"] = copy_retries
+            self.config["settings"]["retry_delay"] = retry_delay
             
             save_games_config(self.config_path, self.config)
             
@@ -874,6 +933,10 @@ class BackupManagerApp(App):
             # Reinitialize backup manager if needed
             if self.manager:
                 self.manager.max_backups = max_backups
+                # Update runtime options on manager instance
+                self.manager.skip_locked_files = skip_locked
+                self.manager.retries = copy_retries
+                self.manager.retry_delay = retry_delay
             
         except ValueError:
             self.notify("Invalid value for max backups", severity="error")

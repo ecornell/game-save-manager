@@ -10,6 +10,9 @@
   "settings": {
     "default_max_backups": 10,
     "auto_expand_paths": true,
-    "default_backup_path": "C:\\Util\\save-backups\\backups"
+  "default_backup_path": "C:\\Util\\save-backups\\backups",
+  "skip_locked_files": false,
+  "copy_retries": 3,
+  "retry_delay": 0.5
   }
 }

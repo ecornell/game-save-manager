@@ -13,6 +13,8 @@ import hashlib
 import errno
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+import ctypes
+from ctypes import wintypes
 
 # Color codes for better terminal output
 class Colors:
@@ -344,12 +346,20 @@ def remove_game_from_config(config_path: Path, config: Dict[str, Any]):
         print_error("Invalid input.")
 
 class SaveBackupManager:
-    def __init__(self, save_dir=None, backup_dir=None, max_backups=10, game_name=None):
+    def __init__(self, save_dir=None, backup_dir=None, max_backups=10, game_name=None,
+                 skip_locked_files: bool = False, pre_backup_cmd: Optional[str] = None,
+                 post_backup_cmd: Optional[str] = None, retries: int = 3, retry_delay: float = 0.5):
         # Default to current directory if not specified
         self.save_dir = Path(save_dir) if save_dir else Path.cwd()
         self.backup_dir = Path(backup_dir) if backup_dir else self.save_dir / "backups"
         self.max_backups = max_backups
         self.game_name = game_name
+        # New options for handling locked files and hooks
+        self.skip_locked_files = skip_locked_files
+        self.pre_backup_cmd = pre_backup_cmd
+        self.post_backup_cmd = post_backup_cmd
+        self.retries = retries
+        self.retry_delay = retry_delay
         
         # Create backup directory if it doesn't exist
         self.backup_dir.mkdir(exist_ok=True)
@@ -385,6 +395,88 @@ class SaveBackupManager:
             def handle_remove_readonly_old(func, path, exc_info):
                 handle_remove_readonly(func, path, exc_info)
             shutil.rmtree(path, onerror=handle_remove_readonly_old)
+
+    def _run_hook(self, cmd: Optional[str], when: str = "pre"):
+        """Run a pre/post backup command if configured."""
+        if not cmd:
+            return
+        try:
+            print_info(f"Running {when}-backup hook: {cmd}")
+            subprocess.run(cmd, shell=True, check=False)
+        except Exception as e:
+            print_warning(f"Hook '{when}' failed: {e}")
+
+    def _win_read_file_to_path(self, src: str, dst_path: str) -> bool:
+        """Try to read file using Win32 CreateFile with generous sharing to copy locked files.
+        Returns True on success, False on failure.
+        """
+        # Only available on Windows
+        if os.name != 'nt':
+            return False
+
+        GENERIC_READ = 0x80000000
+        FILE_SHARE_READ = 0x00000001
+        FILE_SHARE_WRITE = 0x00000002
+        FILE_SHARE_DELETE = 0x00000004
+        OPEN_EXISTING = 3
+
+        CreateFileW = ctypes.windll.kernel32.CreateFileW
+        ReadFile = ctypes.windll.kernel32.ReadFile
+        CloseHandle = ctypes.windll.kernel32.CloseHandle
+
+        handle = CreateFileW(wintypes.LPCWSTR(src), GENERIC_READ,
+                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                             None, OPEN_EXISTING, 0, None)
+        if handle == wintypes.HANDLE(-1).value:
+            return False
+
+        try:
+            with open(dst_path, 'wb') as out_f:
+                buf_size = 8192
+                buf = ctypes.create_string_buffer(buf_size)
+                bytes_read = wintypes.DWORD(0)
+                while True:
+                    ok = ReadFile(handle, buf, buf_size, ctypes.byref(bytes_read), None)
+                    if not ok:
+                        break
+                    if bytes_read.value == 0:
+                        break
+                    out_f.write(buf.raw[:bytes_read.value])
+        finally:
+            CloseHandle(handle)
+        try:
+            shutil.copystat(src, dst_path)
+        except Exception:
+            pass
+        return True
+
+    def _safe_copy(self, src: str, dst: str, follow_symlinks=True) -> None:
+        """Copy a single file with retries and Windows fallback for locked files."""
+        last_err = None
+        for attempt in range(1, max(1, self.retries) + 1):
+            try:
+                shutil.copy2(src, dst, follow_symlinks=follow_symlinks)
+                return
+            except (PermissionError, OSError) as e:
+                last_err = e
+                # Try Windows-specific fallback to read locked files
+                if os.name == 'nt':
+                    try:
+                        ok = self._win_read_file_to_path(src, dst)
+                        if ok:
+                            return
+                    except Exception:
+                        pass
+
+                if attempt < self.retries:
+                    time.sleep(self.retry_delay * attempt)
+                    continue
+                # If configured to skip locked files, warn and return without raising
+                if self.skip_locked_files:
+                    print_warning(f"Skipping locked file: {src} -> {dst} ({last_err})")
+                    return
+                # Re-raise the last error if we exhausted retries
+                raise
     
     def _get_save_size(self) -> str:
         """Get the size of the save directory"""
@@ -520,7 +612,13 @@ class SaveBackupManager:
                 files_copied = getattr(copy_with_progress, 'counter', 0)
                 copy_with_progress.counter = files_copied + 1
                 show_progress(copy_with_progress.counter, file_count, "Copying files")
-                return shutil.copy2(src, dst, follow_symlinks=follow_symlinks)
+                # Use safe copy that handles locked files and retries
+                try:
+                    self._safe_copy(src, dst, follow_symlinks=follow_symlinks)
+                    return dst
+                except Exception:
+                    # Re-raise to allow higher-level handler to catch and cleanup
+                    raise
             
             # Perform copy into a temporary directory inside the backups folder so
             # incomplete backups are never visible to listing/restore operations.
@@ -922,6 +1020,9 @@ Examples:
     parser.add_argument("--game", help="Game ID from config file")
     parser.add_argument("--config", action="store_true", help="Manage game configurations")
     parser.add_argument("--backup", action="store_true", help="Create a backup")
+    parser.add_argument("--skip-locked", action="store_true", help="Skip locked files instead of failing")
+    parser.add_argument("--copy-retries", type=int, help="Number of copy retries for locked files")
+    parser.add_argument("--retry-delay", type=float, help="Base delay (seconds) between retries")
     parser.add_argument("-d", "--description", help="Description for the backup")
     parser.add_argument("--restore", type=int, help="Restore backup by number")
     parser.add_argument("--list", action="store_true", help="List all backups")
@@ -1044,9 +1145,18 @@ Examples:
         print_error(f"Save directory does not exist: {save_dir}")
         return
     
+    # Determine skip_locked_files and retry settings from args or config
+    settings = config.get("settings", {})
+    skip_locked = args.skip_locked or settings.get("skip_locked_files", False)
+    copy_retries = args.copy_retries if args.copy_retries is not None else settings.get("copy_retries", 3)
+    retry_delay = args.retry_delay if args.retry_delay is not None else settings.get("retry_delay", 0.5)
+
     # Initialize backup manager
     try:
-        manager = SaveBackupManager(save_dir, backup_dir, max_backups, game_name)
+        manager = SaveBackupManager(save_dir, backup_dir, max_backups, game_name,
+                                    skip_locked_files=skip_locked,
+                                    retries=copy_retries,
+                                    retry_delay=retry_delay)
     except Exception as e:
         print_error(f"Failed to initialize backup manager: {e}")
         sys.exit(1)
