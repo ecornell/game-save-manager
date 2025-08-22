@@ -15,7 +15,8 @@ A small, dependable utility to back up, restore, and manage game save files on W
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.13+  
+	(project pyproject.toml requires Python >= 3.13)
 - (optional) UV package manager for convenience
 
 ### Run
@@ -65,18 +66,19 @@ uv run backup.py --game grim_dawn --cleanup --keep 5
 
 The Textual-based terminal UI offers a richer, table-driven experience (tabbed interface, dialogs, progress indicators). This is a first-class interface for users who prefer a GUI-like TUI.
 
+
 Install Textual and run the TUI:
 
 ```powershell
 uv add textual
-python backup_gui_textual.py
-# or use the launcher
-python run_textual_gui.py
+python backup_gui.py
+# or use the launcher (Windows)
+run_textual_gui.bat
 ```
 
 ![Textual TUI screenshot](docs/screenshot-1.svg)
 
-Common TUI keys: `q` quit, `r` refresh, `c` create backup, `d` delete, `Tab` navigate, `Enter` activate.
+Common TUI keys: `q` quit, `r` refresh, `c` create backup, `x` delete, `Tab` navigate, `Enter` activate.
 
 ## Configuration
 
@@ -92,7 +94,6 @@ Backups are stored under the `backups/` directory, grouped by game ID, with time
 
 Safety measures:
 
-- The current save state is backed up before a restore
 - Confirmation required for destructive actions
 - Basic validation of paths and read-only file handling on Windows
 
