@@ -1,12 +1,14 @@
 # 🎮 Save Game Backup Manager
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A small, dependable utility to back up, restore, and manage game save files on Windows. It supports multiple games, automatic cleanup, descriptive backups, and a choice of interfaces: a CLI/interactive menu and a Textual-based terminal GUI.
 
 ## ✨ Key features
 
 - Multi-game support with per-game configuration
 - Quick, timestamped backups with optional descriptions
-- Restore any backup and pre-restore snapshots for safety
+- Restore any backup
 - Automatic cleanup (keep N most recent backups)
 - Shared JSON configuration (`games_config.json`) across interfaces
 - Works well on Windows (handles read-only files and common path patterns)
