@@ -8,6 +8,9 @@ import time
 import json
 import subprocess
 import threading
+import tempfile
+import hashlib
+import errno
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -65,10 +68,11 @@ def format_file_size(size_bytes: int) -> str:
         return "0B"
     size_names = ["B", "KB", "MB", "GB", "TB"]
     i = 0
-    while size_bytes >= 1024.0 and i < len(size_names) - 1:
-        size_bytes /= 1024.0
+    size = float(size_bytes)
+    while size >= 1024.0 and i < len(size_names) - 1:
+        size /= 1024.0
         i += 1
-    return f"{size_bytes:.1f}{size_names[i]}"
+    return f"{size:.1f}{size_names[i]}"
 
 def get_directory_size(path: Path) -> int:
     """Calculate total size of directory"""
@@ -82,6 +86,34 @@ def get_directory_size(path: Path) -> int:
     except (OSError, FileNotFoundError):
         pass
     return total_size
+
+
+def compute_directory_sha256(path: Path) -> str:
+    """Compute a SHA256 hash for all files under a directory in a deterministic order."""
+    h = hashlib.sha256()
+    for root, dirs, files in os.walk(path):
+        # Sort to ensure deterministic order
+        dirs.sort()
+        files.sort()
+        for fname in files:
+            file_path = os.path.join(root, fname)
+            try:
+                # Update with relative file path to make hash path-independent
+                rel_path = os.path.relpath(file_path, start=str(path)).replace('\\', '/')
+                h.update(rel_path.encode('utf-8'))
+                # Update with file size and content
+                stat = os.stat(file_path)
+                h.update(str(stat.st_size).encode('utf-8'))
+                with open(file_path, 'rb') as f:
+                    while True:
+                        chunk = f.read(8192)
+                        if not chunk:
+                            break
+                        h.update(chunk)
+            except Exception:
+                # If a file can't be read, include an error marker
+                h.update(b'__unreadable__')
+    return h.hexdigest()
 
 def load_games_config(config_path: Path) -> Dict[str, Any]:
     """Load games configuration from JSON file"""
@@ -322,6 +354,13 @@ class SaveBackupManager:
         # Create backup directory if it doesn't exist
         self.backup_dir.mkdir(exist_ok=True)
 
+        # On startup, attempt to recover or clean up any leftover temp dirs
+        try:
+            self._recover_or_cleanup_tmp_dirs()
+        except Exception as e:
+            # Non-fatal: just log
+            print_warning(f"Failed to cleanup leftover temp dirs: {e}")
+
         print_info(f"Game: {self.game_name or 'Custom'}")
         print_info(f"Save directory: {self.save_dir}")
         print_info(f"Backup directory: {self.backup_dir}")
@@ -373,6 +412,83 @@ class SaveBackupManager:
         """Get sorted list of backup directories"""
         backup_pattern = self.backup_dir / "backup_*"
         return sorted(glob.glob(str(backup_pattern)), reverse=True)
+
+    def _recover_or_cleanup_tmp_dirs(self):
+        """Detect leftover temp backup dirs (created with mkdtemp prefix '.backup_...') and
+        either recover them by renaming to the final backup name or remove them if incomplete.
+        """
+        if not self.backup_dir.exists():
+            return
+
+        for entry in self.backup_dir.iterdir():
+            try:
+                if not entry.is_dir():
+                    continue
+                name = entry.name
+                # Temp dirs created by mkdtemp use prefix f".{backup_name}."
+                if not name.startswith('.backup_'):
+                    continue
+
+                print_info(f"Found leftover temp backup dir: {name}")
+
+                # Heuristic: if directory has no files, remove it; otherwise attempt recovery
+                file_count = sum(len(files) for _, _, files in os.walk(entry))
+                if file_count == 0:
+                    print_info(f"Removing empty temp dir: {name}")
+                    self._safe_rmtree(entry)
+                    continue
+
+                # Derive final backup base name: strip leading dot and suffix
+                tmp_name = name[1:]
+                final_base = tmp_name.split('.', 1)[0]
+                final_path = self.backup_dir / final_base
+
+                if final_path.exists():
+                    # A final directory already exists; remove the temp dir
+                    print_warning(f"Final backup already exists for {final_base}; removing temp dir")
+                    self._safe_rmtree(entry)
+                    continue
+
+                # Attempt to move temp dir to final name; handle cross-device similarly to create_backup
+                try:
+                    os.replace(str(entry), str(final_path))
+                    move_method = "recovered_atomic"
+                except OSError as ex:
+                    if getattr(ex, 'errno', None) == errno.EXDEV:
+                        try:
+                            shutil.move(str(entry), str(final_path))
+                            move_method = "recovered_copied"
+                        except Exception as move_err:
+                            print_warning(f"Failed to move temp dir {name} to {final_base}: {move_err}")
+                            # Remove the temp dir to avoid clutter
+                            self._safe_rmtree(entry)
+                            continue
+                    else:
+                        print_warning(f"Failed to rename temp dir {name}: {ex}")
+                        self._safe_rmtree(entry)
+                        continue
+
+                # Write metadata for recovered backup
+                try:
+                    checksum = compute_directory_sha256(final_path)
+                    total_size = get_directory_size(final_path)
+                    total_files = sum(len(files) for _, _, files in os.walk(final_path))
+                    meta = {
+                        "completed_at": datetime.datetime.now().isoformat(),
+                        "checksum": checksum,
+                        "files": total_files,
+                        "size_bytes": total_size,
+                        "move_method": move_method,
+                        "recovered": True
+                    }
+                    meta_file = final_path / ".backup_meta.json"
+                    meta_file.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding='utf-8')
+                    print_success(f"Recovered backup: {final_base}")
+                except Exception as meta_err:
+                    print_warning(f"Failed to write metadata for recovered backup {final_base}: {meta_err}")
+            except Exception:
+                # Ignore errors per-directory and continue
+                continue
     
     def create_backup(self, description: Optional[str] = None) -> Optional[Path]:
         """Create a timestamped backup of the save directory"""
@@ -406,24 +522,86 @@ class SaveBackupManager:
                 show_progress(copy_with_progress.counter, file_count, "Copying files")
                 return shutil.copy2(src, dst, follow_symlinks=follow_symlinks)
             
-            # Backup with progress
-            shutil.copytree(
-                self.save_dir, 
-                backup_path, 
-                ignore=shutil.ignore_patterns("backups", "*.pyc", "__pycache__", "*.tmp"),
-                copy_function=copy_with_progress
-            )
-            
-            print()  # New line after progress bar
-            elapsed_time = time.time() - start_time
-            
-            # Save description if provided
-            if description:
-                desc_file = backup_path / ".backup_description"
-                desc_file.write_text(description, encoding='utf-8')
-            
-            print_success(f"Backup created successfully in {elapsed_time:.1f}s")
-            print_info(f"Location: {backup_path}")
+            # Perform copy into a temporary directory inside the backups folder so
+            # incomplete backups are never visible to listing/restore operations.
+            tmp_dir = None
+            try:
+                # Create a temp directory path (shutil.copytree requires dest to not exist)
+                # Use a hidden prefix so it's ignored by normal listings
+                tmp_dir = Path(tempfile.mkdtemp(prefix=f".{backup_name}.", dir=str(self.backup_dir)))
+
+                # Copy into the temp directory
+                shutil.copytree(
+                    self.save_dir,
+                    tmp_dir,
+                    ignore=shutil.ignore_patterns("backups", "*.pyc", "__pycache__", "*.tmp"),
+                    copy_function=copy_with_progress,
+                    dirs_exist_ok=True
+                )
+
+                print()  # New line after progress bar
+                elapsed_time = time.time() - start_time
+
+                # Save description if provided (write into tmp dir before rename)
+                if description:
+                    desc_file = tmp_dir / ".backup_description"
+                    desc_file.write_text(description, encoding='utf-8')
+
+                # Atomically move the completed temp dir to the final name.
+                # os.replace is atomic on the same filesystem; if we get EXDEV
+                # (cross-device link), fall back to shutil.move which copies
+                # across filesystems.
+                move_method = "atomic"
+                try:
+                    if backup_path.exists():
+                        # Shouldn't happen, but ensure no collision
+                        self._safe_rmtree(backup_path)
+                    os.replace(str(tmp_dir), str(backup_path))
+                except OSError as ex:
+                    if getattr(ex, 'errno', None) == errno.EXDEV:
+                        # Cross-device link: fallback to shutil.move (copy+remove)
+                        move_method = "copied"
+                        try:
+                            if backup_path.exists():
+                                self._safe_rmtree(backup_path)
+                            shutil.move(str(tmp_dir), str(backup_path))
+                        except Exception:
+                            # If move fails, re-raise original exception to be handled
+                            raise
+                    else:
+                        raise
+                tmp_dir = None  # transferred ownership to final location
+
+                # After successful atomic move, compute checksum and write metadata
+                try:
+                    checksum = compute_directory_sha256(backup_path)
+                    total_size = get_directory_size(backup_path)
+                    total_files = sum(len(files) for _, _, files in os.walk(backup_path))
+                    meta = {
+                        "completed_at": datetime.datetime.now().isoformat(),
+                        "checksum": checksum,
+                        "files": total_files,
+                        "size_bytes": total_size,
+                        "move_method": move_method
+                    }
+                    if description:
+                        meta["description"] = description
+                    meta_file = backup_path / ".backup_meta.json"
+                    meta_file.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding='utf-8')
+                except Exception as meta_err:
+                    # Don't fail the backup if metadata write fails; log and continue
+                    print_warning(f"Failed to write backup metadata: {meta_err}")
+
+                print_success(f"Backup created successfully in {elapsed_time:.1f}s")
+                print_info(f"Location: {backup_path}")
+
+            finally:
+                # Cleanup temp dir if something went wrong and it still exists
+                if tmp_dir and tmp_dir.exists():
+                    try:
+                        self._safe_rmtree(tmp_dir)
+                    except Exception:
+                        pass
             
             # Cleanup old backups
             self._cleanup_old_backups()

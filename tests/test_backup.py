@@ -3,6 +3,10 @@ import json
 import shutil
 import datetime
 from pathlib import Path
+import sys
+
+# Ensure repository root is on sys.path so tests can import backup.py as a module
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
 import time
@@ -90,3 +94,48 @@ def test_restore_backup(tmp_path):
 
     # verify file content was replaced
     assert (save_dir / "a.txt").read_text() == "new"
+
+
+def test_interrupted_backup_leaves_no_partial_and_metadata_on_success(tmp_path, monkeypatch):
+    # Prepare many small files to exercise copy loop
+    save_dir = tmp_path / "many_saves"
+    save_dir.mkdir()
+    for i in range(10):
+        (save_dir / f"f{i}.txt").write_text(f"data{i}")
+
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+
+    manager = backup.SaveBackupManager(save_dir, backup_dir, max_backups=5)
+
+    # Monkeypatch shutil.copy2 to raise after a few copies to simulate interruption
+    import shutil as _shutil
+    original_copy2 = _shutil.copy2
+    counter = {"count": 0}
+
+    def failing_copy2(src, dst, follow_symlinks=True):
+        counter["count"] += 1
+        # allow first two files then fail to simulate crash
+        if counter["count"] == 3:
+            raise KeyboardInterrupt("simulated interruption")
+        return original_copy2(src, dst, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr("shutil.copy2", failing_copy2)
+
+    # Attempt backup; should handle exception and return None (failure)
+    res = manager.create_backup("interrupted")
+    assert res is None
+
+    # Ensure there are no visible backup_* directories (hidden tmp dirs may exist but should be cleaned)
+    visible_backups = [p for p in backup_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
+    assert len(visible_backups) == 0
+
+    # Now restore copy2 and perform a successful backup to verify metadata is written
+    monkeypatch.setattr("shutil.copy2", original_copy2)
+    success = manager.create_backup("final")
+    assert success is not None
+
+    meta = (success / ".backup_meta.json")
+    assert meta.exists()
+    data = json.loads(meta.read_text(encoding='utf-8'))
+    assert "checksum" in data and "completed_at" in data and "move_method" in data

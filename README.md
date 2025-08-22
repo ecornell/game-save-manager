@@ -99,6 +99,21 @@ Safety measures:
 - Confirmation required for destructive actions
 - Basic validation of paths and read-only file handling on Windows
 
+Metadata schema
+----------------
+
+Each completed backup includes a small metadata file named `.backup_meta.json` stored in the backup folder. It contains machine-readable information used by the app for verification and display. Fields:
+
+- `completed_at` (string, ISO 8601): timestamp when the backup finished.
+- `checksum` (string): SHA256 digest computed over the backup contents (deterministic ordering).
+- `files` (int): number of files contained in the backup.
+- `size_bytes` (int): total size of files in bytes.
+- `move_method` (string): how the final backup was moved into place — `atomic` (fast rename), `copied` (cross-filesystem copy fallback), or `recovered_*` for recovered temp dirs.
+- `description` (string, optional): user-provided description for the backup.
+- `recovered` (bool, optional): present and true if the backup was recovered from a leftover temp directory on startup.
+
+The file is primarily for internal use but can be inspected to verify backup integrity or to drive UI displays.
+
 
 ## Troubleshooting
 
