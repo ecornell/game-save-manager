@@ -1,242 +1,116 @@
 # 🎮 Save Game Backup Manager
 
-A comprehensive command-line tool for backing up, restoring, and managing game save files. Keep your precious game progress safe with automated backups, easy restoration, and organized storage.
+A small, dependable utility to back up, restore, and manage game save files on Windows. It supports multiple games, automatic cleanup, descriptive backups, and a choice of interfaces: a CLI/interactive menu and a Textual-based terminal GUI.
 
-## ✨ Features
+## ✨ Key features
 
-- **🎮 Multi-Game Support**: Configure and manage multiple games with individual settings
-- **🔄 Easy Restoration**: Restore any backup with a simple menu interface
-- **🧹 Intelligent Cleanup**: Automatically manage backup storage with configurable limits
-- **🎨 Colorful Interface**: Beautiful terminal output with emojis and colors
-- **⚙️ Flexible Configuration**: JSON-based configuration with hot-reloading
-- **📝 Backup Descriptions**: Add descriptive notes to your backups
-- **📊 Size Reporting**: Track backup sizes and save directory information
+- Multi-game support with per-game configuration
+- Quick, timestamped backups with optional descriptions
+- Restore any backup and pre-restore snapshots for safety
+- Automatic cleanup (keep N most recent backups)
+- Shared JSON configuration (`games_config.json`) across interfaces
+- Works well on Windows (handles read-only files and common path patterns)
 
-## 🚀 Quick Start
+## 🚀 Quick start
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- UV package manager (recommended) or standard Python
+- Python 3.8+
+- (optional) UV package manager for convenience
 
-### Installation
+### Run
 
-1. Clone or download this repository
-2. Ensure you have UV installed, or use standard Python
-3. Run the backup tool:
+On Windows you can use the bundled batch launcher:
 
-```bash
-# Using the provided batch file (Windows)
-backup.bat
+```powershell
+.\backup.bat
+```
 
-# Or directly with UV
-uv run backup.py
+Or run directly:
 
-# Or with standard Python
+```powershell
 python backup.py
+# or, with UV
+uv run backup.py
 ```
 
-### First Run Setup
+On first run the script will create a `games_config.json` template in the repo folder.
 
-On first run, the tool will create a default configuration file (`games_config.json`) that you can customize for your games.
+## Interfaces
 
-## 📖 Usage
+This project provides two main interfaces. Use whichever fits your workflow.
 
-### Interactive Mode (Recommended)
+### 1) Interactive CLI (default)
 
-Simply run the tool without arguments for the full interactive experience:
+Run `backup.py` or `backup.bat` to get a simple, keyboard-driven menu for:
 
-```bash
-backup.bat
-```
+- Creating backups
+- Listing/backing up/restoring/deleting backups
+- Managing game configuration (opens a simple config manager)
 
-This provides a user-friendly menu interface for all operations.
+Examples:
 
-### Command Line Usage
-
-```bash
-# Quick backup of configured game
+```powershell
+# Quick backup for a configured game
 uv run backup.py --game grim_dawn --backup
 
-# Backup with description
+# Backup with a description
 uv run backup.py --game grim_dawn --backup -d "Before boss fight"
 
-# List all backups
-uv run backup.py --game grim_dawn --list
-
-# Restore specific backup
-uv run backup.py --game grim_dawn --restore 1
-
-# Manage game configurations
-uv run backup.py --config
-
-# Cleanup old backups (keep 5 most recent)
+# Cleanup (keep 5 most recent)
 uv run backup.py --game grim_dawn --cleanup --keep 5
 ```
 
-### Command Line Options
+### 2) Textual TUI (terminal GUI)
 
-| Option | Description |
-|--------|-------------|
-| `--game <id>` | Use specific game from configuration |
-| `--save-dir <path>` | Override save directory path |
-| `--backup-dir <path>` | Override backup directory path |
-| `--max-backups <num>` | Maximum backups to keep |
-| `--backup` | Create a backup immediately |
-| `-d, --description <text>` | Add description to backup |
-| `--restore <num>` | Restore backup by number |
-| `--list` | List all available backups |
-| `--delete <num>` | Delete specific backup |
-| `--cleanup` | Clean up old backups |
-| `--keep <num>` | Number of backups to keep during cleanup |
-| `--config` | Manage game configurations |
+The Textual-based terminal UI offers a richer, table-driven experience (tabbed interface, dialogs, progress indicators). This is a first-class interface for users who prefer a GUI-like TUI.
 
-## ⚙️ Configuration
+Install Textual and run the TUI:
 
-### Game Configuration File
-
-The tool uses `games_config.json` to store game configurations. Here's an example:
-
-```json
-{
-  "games": {
-    "grim_dawn": {
-      "name": "Grim Dawn",
-      "save_path": "C:\\Users\\username\\OneDrive\\Documents\\My Games\\Grim Dawn\\save",
-      "backup_path": "C:\\Util\\save-backups\\backups\\grim_dawn",
-      "description": "Action RPG with character builds"
-    },
-    "skyrim": {
-      "name": "The Elder Scrolls V: Skyrim",
-      "save_path": "C:\\Users\\username\\Documents\\My Games\\Skyrim\\Saves",
-      "backup_path": "C:\\Util\\save-backups\\backups\\skyrim",
-      "description": "Open-world RPG adventure"
-    }
-  },
-  "settings": {
-    "default_max_backups": 10,
-    "auto_expand_paths": true,
-    "default_backup_path": "C:\\Util\\save-backups\\backups"
-  }
-}
+```powershell
+uv add textual
+python backup_gui_textual.py
+# or use the launcher
+python run_textual_gui.py
 ```
 
-### Path Expansion
+![Textual TUI screenshot](docs/screenshot-1.svg)
 
-The tool supports automatic path expansion:
-- Environment variables: `%USERPROFILE%`, `%DOCUMENTS%`, etc.
-- User home directory: `~` expands to user home
-- Relative paths from the tool directory
+Common TUI keys: `q` quit, `r` refresh, `c` create backup, `d` delete, `Tab` navigate, `Enter` activate.
 
-### Adding Games
+## Configuration
 
-You can add games through:
+All game and global settings live in `games_config.json`. The file contains a `games` object and `settings` (defaults like `default_max_backups` and `default_backup_path`). The app auto-creates a default file on first run.
 
-1. **Interactive Config Manager**: Run `backup.py --config`
-2. **Manual Editing**: Edit `games_config.json` directly (auto-reloads)
-3. **Notepad Integration**: Use the built-in Notepad opener with auto-reload
+You can edit configurations using the interactive config manager (`backup.py --config`) or by editing `games_config.json` directly.
 
-## 🗂️ Backup Structure
+Path expansion supports environment variables (e.g. `%USERPROFILE%`) and `~` home expansion.
 
-Backups are organized with timestamped directories:
+## Backup layout & safety
 
-```
-backups/
-├── grim_dawn/
-│   ├── backup_20250817_142316/
-│   │   ├── .backup_description          # Optional description file
-│   │   ├── formulas.gst
-│   │   ├── player.gdc
-│   │   └── main/
-│   │       ├── character1/
-│   │       └── character2/
-│   ├── backup_20250817_115024/
-│   └── backup_20250816_153946/
-└── skyrim/
-    ├── backup_20250817_100000/
-    └── backup_20250816_200000/
-```
+Backups are stored under the `backups/` directory, grouped by game ID, with timestamped subfolders (e.g. `backup_YYYYMMDD_HHMMSS`). Each backup may include a `.backup_description` file if you provided a description.
 
-## 🛡️ Safety Features
+Safety measures:
 
-- **Pre-restore Backups**: Current state is backed up before restoration
-- **Confirmation Prompts**: All destructive operations require confirmation
-- **Error Handling**: Robust error handling with informative messages
-- **Read-only File Support**: Handles Windows read-only files properly
-- **Path Validation**: Checks if directories exist before operations
+- The current save state is backed up before a restore
+- Confirmation required for destructive actions
+- Basic validation of paths and read-only file handling on Windows
 
-## 💡 Tips & Best Practices
 
-1. **Regular Backups**: Create backups before major game sessions
-2. **Descriptive Names**: Use meaningful descriptions for important saves
-3. **Storage Management**: Set appropriate `max_backups` limits
-4. **Multiple Games**: Configure all your important games for easy switching
-5. **Pre-Boss Backups**: Always backup before challenging encounters
-6. **Mod Testing**: Backup before installing new mods
-7. **Achievement Runs**: Create milestone backups during achievement runs
+## Troubleshooting
 
-## 🔧 File Types
+Permission errors: run as administrator or check folder permissions and close games before operations.
 
-The tool creates several files:
+Path issues: verify paths in `games_config.json` and prefer absolute paths where possible.
 
-| File | Purpose |
-|------|---------|
-| `backup.py` | Main Python script |
-| `backup.bat` | Windows batch launcher |
-| `games_config.json` | User game configurations |
-| `games_config.json.default` | Default configuration template |
-| `backups/` | Directory containing all backup data |
+If backups fail: ensure disk space and check antivirus or open file locks.
 
-## 🐛 Troubleshooting
+For configuration problems: validate `games_config.json` or restore `games_config.json.default`.
 
-### Common Issues
+## Contributing & License
 
-**Permission Errors**:
-- Run as administrator if needed
-- Check file/folder permissions
-- Close games before backup/restore
-
-**Path Not Found**:
-- Verify game installation paths
-- Check path expansion in config
-- Use absolute paths when in doubt
-
-**Backup Failures**:
-- Ensure sufficient disk space
-- Close game before backup
-- Check antivirus interference
-
-**Config File Issues**:
-- Validate JSON syntax
-- Check file encoding (UTF-8)
-- Restore from `.default` if corrupted
-
-### Debug Information
-
-The tool provides detailed output about:
-- Selected game and paths
-- Backup sizes and file counts
-- Operation progress and timing
-- Error details and suggestions
-
-## 🤝 Contributing
-
-Feel free to contribute by:
-- Reporting bugs and issues
-- Suggesting new features
-- Submitting pull requests
-- Improving documentation
-
-## 📄 License
-
-This project is open source. Feel free to use, modify, and distribute as needed.
-
-## 🙏 Acknowledgments
-
-- Built with Python and the UV package manager
-- Designed for Windows gaming environments
-- Inspired by the need to protect valuable game save data
+Contributions welcome: file issues, suggest features, or submit PRs. This project is open source — see the `LICENSE` in the repo.
 
 ---
 
-**Happy Gaming! 🎮** Keep your saves safe and never lose progress again!
+**Happy Gaming! 🎮** Keep your saves safe.
