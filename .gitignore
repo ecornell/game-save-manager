@@ -1,3 +1,4 @@
 __pycache__/
 backups/
 games_config.json
+.coverage

@@ -12,6 +12,8 @@ import pytest
 import time
 
 import backup
+import tempfile
+import errno
 
 
 
@@ -117,7 +119,7 @@ def test_interrupted_backup_leaves_no_partial_and_metadata_on_success(tmp_path, 
         counter["count"] += 1
         # allow first two files then fail to simulate crash
         if counter["count"] == 3:
-            raise KeyboardInterrupt("simulated interruption")
+            raise RuntimeError("simulated interruption")
         return original_copy2(src, dst, follow_symlinks=follow_symlinks)
 
     monkeypatch.setattr("shutil.copy2", failing_copy2)
@@ -139,3 +141,85 @@ def test_interrupted_backup_leaves_no_partial_and_metadata_on_success(tmp_path, 
     assert meta.exists()
     data = json.loads(meta.read_text(encoding='utf-8'))
     assert "checksum" in data and "completed_at" in data and "move_method" in data
+
+
+def test_exdev_fallback_moves_and_metadata_copied(tmp_path, monkeypatch):
+    # Simulate os.replace raising EXDEV so code falls back to shutil.move
+    save_dir = tmp_path / "saves_exdev"
+    save_dir.mkdir()
+    (save_dir / "a.txt").write_text("content")
+
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+
+    manager = backup.SaveBackupManager(save_dir, backup_dir, max_backups=3)
+
+    import os as _os
+    import errno as _errno
+
+    def fake_replace(a, b):
+        raise OSError(_errno.EXDEV, "simulated cross-device link")
+
+    monkeypatch.setattr(_os, "replace", fake_replace)
+
+    # Wrap shutil.move to record calls and delegate to the real implementation
+    # Wrap shutil.move to record calls and delegate to the real implementation
+    original_move = shutil.move
+    move_called = {"called": False, "args": None}
+
+    def recording_move(src, dst, *args, **kwargs):
+        move_called["called"] = True
+        move_called["args"] = (src, dst)
+        # Delegate to the real move to actually transfer files during the test
+        return original_move(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "move", recording_move)
+
+    # Perform backup; fallback to shutil.move should succeed and metadata should show 'copied'
+    result = manager.create_backup("exdev-test")
+    assert result is not None
+
+    meta = (result / ".backup_meta.json")
+    assert meta.exists()
+    data = json.loads(meta.read_text(encoding='utf-8'))
+    assert data.get("move_method") == "copied"
+    # Ensure shutil.move was called due to EXDEV fallback
+    assert move_called["called"] is True
+
+
+
+def test_move_failure_cleanup_on_exception(tmp_path, monkeypatch):
+    # Simulate os.replace raising EXDEV and shutil.move also failing to ensure cleanup
+    save_dir = tmp_path / "saves_move_fail"
+    save_dir.mkdir()
+    (save_dir / "a.txt").write_text("content")
+
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+
+    manager = backup.SaveBackupManager(save_dir, backup_dir, max_backups=3)
+
+    import os as _os
+    import errno as _errno
+
+    def fake_replace(a, b):
+        raise OSError(_errno.EXDEV, "simulated cross-device link")
+
+    def fake_move(a, b):
+        raise RuntimeError("simulated move failure")
+
+    # Patch os.replace to force fallback, and patch shutil.move to fail
+    monkeypatch.setattr(_os, "replace", fake_replace)
+    monkeypatch.setattr(shutil, "move", fake_move)
+
+    # Attempt backup; should handle exception and return None
+    res = manager.create_backup("move-fail")
+    assert res is None
+
+    # Ensure no visible final backups
+    visible_backups = [p for p in backup_dir.iterdir() if p.is_dir() and not p.name.startswith('.')]
+    assert len(visible_backups) == 0
+
+    # Ensure no leftover temp dirs (those start with .backup_)
+    tmp_dirs = [p for p in backup_dir.iterdir() if p.is_dir() and p.name.startswith('.backup_')]
+    assert len(tmp_dirs) == 0
