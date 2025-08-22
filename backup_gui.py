@@ -148,6 +148,36 @@ class GameConfigDialog(ModalScreen[Optional[tuple]]):
                 text=self.game_info.get("description", ""),
                 id="description"
             ),
+            # Per-game override settings
+            Label("Per-game settings (leave blank to use global):"),
+            Horizontal(
+                Label("Skip locked files:"),
+                Select(
+                    options=[("Default", ""), ("False", "false"), ("True", "true")],
+                    id="game_skip_locked",
+                    prompt="Inherit or override"
+                ),
+                classes="setting-row"
+            ),
+            Horizontal(
+                Label("Copy retries:"),
+                Input(
+                    value=str(self.game_info.get("copy_retries", "")) if self.game_info.get("copy_retries") is not None else "",
+                    placeholder="e.g., 3",
+                    id="game_copy_retries",
+                    validators=[Number(minimum=0, maximum=20)]
+                ),
+                classes="setting-row"
+            ),
+            Horizontal(
+                Label("Retry delay (s):"),
+                Input(
+                    value=str(self.game_info.get("retry_delay", "")) if self.game_info.get("retry_delay") is not None else "",
+                    placeholder="e.g., 0.5",
+                    id="game_retry_delay",
+                ),
+                classes="setting-row"
+            ),
             
             Horizontal(
                 Button("Cancel", variant="default", id="cancel"),
@@ -164,31 +194,40 @@ class GameConfigDialog(ModalScreen[Optional[tuple]]):
         save_path = self.query_one("#save_path", Input).value.strip()
         backup_path = self.query_one("#backup_path", Input).value.strip()
         description = self.query_one("#description", TextArea).text.strip()
-        
+
+        # Per-game overrides (read inside method scope)
+        game_skip_locked_val = self.query_one("#game_skip_locked", Select).value
+        game_copy_retries_val = self.query_one("#game_copy_retries", Input).value.strip()
+        game_retry_delay_val = self.query_one("#game_retry_delay", Input).value.strip()
+
         # Validate input
         if not game_id:
             self.notify("Game ID is required", severity="error")
             return
-        
+
         if ' ' in game_id:
             self.notify("Game ID cannot contain spaces", severity="error")
             return
-        
+
         if not name:
             self.notify("Game name is required", severity="error")
             return
-        
+
         if not save_path:
             self.notify("Save path is required", severity="error")
             return
-        
+
         result = (game_id, {
             "name": name,
             "save_path": save_path,
             "backup_path": backup_path,
-            "description": description
+            "description": description,
+            # Only set overrides if provided
+            **({"skip_locked_files": True} if game_skip_locked_val == "true" else ({"skip_locked_files": False} if game_skip_locked_val == "false" else {})),
+            **({"copy_retries": int(game_copy_retries_val)} if game_copy_retries_val else {}),
+            **({"retry_delay": float(game_retry_delay_val)} if game_retry_delay_val else {})
         })
-        
+
         self.dismiss(result)
     
     @on(Button.Pressed, "#cancel")
@@ -297,7 +336,8 @@ class BackupManagerApp(App):
                             value="10",
                             placeholder="10",
                             id="max_backups",
-                            validators=[Number(minimum=1, maximum=100)]
+                            validators=[Number(minimum=1, maximum=100)],
+                            compact=True
                         ),
                         classes="setting-row"
                     ),
@@ -306,6 +346,7 @@ class BackupManagerApp(App):
                         Input(
                             placeholder="Leave empty for default",
                             id="backup_path",                                                        
+                            compact=True
                         ),
                         classes="setting-row"
                     ),
@@ -314,7 +355,8 @@ class BackupManagerApp(App):
                         Select(
                             options=[("False", "false"), ("True", "true")],
                             id="skip_locked",
-                            prompt="Skip locked files?"
+                            prompt="Skip locked files?",
+                            compact=True
                         ),
                         classes="setting-row"
                     ),
@@ -324,7 +366,8 @@ class BackupManagerApp(App):
                             value="3",
                             placeholder="3",
                             id="copy_retries",
-                            validators=[Number(minimum=0, maximum=20)]
+                            validators=[Number(minimum=0, maximum=20)],
+                            compact=True
                         ),
                         classes="setting-row"
                     ),
@@ -334,6 +377,7 @@ class BackupManagerApp(App):
                             value="0.5",
                             placeholder="0.5",
                             id="retry_delay",
+                            compact=True
                         ),
                         classes="setting-row"
                     ),

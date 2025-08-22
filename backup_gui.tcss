@@ -77,7 +77,7 @@ GameConfigDialog {
 }
 
 .setting-row {
-    height: 3;
+    height: 1;
     align: left middle;
     margin: 0 0 1 0;
 }
