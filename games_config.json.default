@@ -14,5 +14,8 @@
   "skip_locked_files": false,
   "copy_retries": 3,
   "retry_delay": 0.5
+    ,
+    "auto_refresh_enabled": true,
+    "auto_refresh_interval": 1
   }
 }

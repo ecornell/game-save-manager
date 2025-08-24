@@ -260,15 +260,17 @@ class BackupManagerApp(App):
         super().__init__()
         self.title = "🎮 Save Game Backup Manager 🎮 "
         self.sub_title = ""
-        
+
         # Load configuration
         self.config_path = Path(__file__).parent / "games_config.json"
         self.config = load_games_config(self.config_path)
-        
+
         # Current state
         self.manager = None
         self.current_game_id = None
         self.current_game_info = None
+        # Auto-refresh task handle
+        self._auto_refresh_task = None
     
     def compose(self) -> ComposeResult:
         yield Header()
@@ -377,6 +379,24 @@ class BackupManagerApp(App):
                             value="0.5",
                             placeholder="0.5",
                             id="retry_delay",
+                            compact=True
+                        ),
+                        classes="setting-row"
+                    ),
+                    Horizontal(
+                        Label("Auto-refresh:"),
+                        Select(
+                            options=[("Disabled", "false"), ("Enabled", "true")],
+                            id="auto_refresh_enabled",
+                            prompt="Enable automatic refresh",
+                            compact=True
+                        ),
+                        Label("Interval (min):"),
+                        Input(
+                            value="1",
+                            placeholder="Minutes",
+                            id="auto_refresh_interval",
+                            validators=[Number(minimum=1, maximum=1440)],
                             compact=True
                         ),
                         classes="setting-row"
@@ -941,6 +961,26 @@ class BackupManagerApp(App):
 
         retry_delay_input = self.query_one("#retry_delay", Input)
         retry_delay_input.value = str(settings.get("retry_delay", 0.5))
+
+        # Auto-refresh settings
+        auto_refresh_enabled = settings.get("auto_refresh_enabled", True)
+        auto_refresh_interval = settings.get("auto_refresh_interval", 5)
+
+        auto_refresh_select = self.query_one("#auto_refresh_enabled", Select)
+        auto_refresh_select.value = "true" if auto_refresh_enabled else "false"
+
+        auto_refresh_interval_input = self.query_one("#auto_refresh_interval", Input)
+        auto_refresh_interval_input.value = str(auto_refresh_interval)
+
+        # Start auto-refresh if enabled
+        try:
+            if auto_refresh_enabled:
+                # use integer minutes
+                minutes = int(auto_refresh_interval) if auto_refresh_interval else 5
+                self.start_auto_refresh(minutes)
+        except Exception:
+            # Ignore startup errors for auto-refresh
+            pass
     
     @on(Button.Pressed, "#save_settings")
     def on_save_settings(self):
@@ -969,6 +1009,13 @@ class BackupManagerApp(App):
             self.config["settings"]["skip_locked_files"] = skip_locked
             self.config["settings"]["copy_retries"] = copy_retries
             self.config["settings"]["retry_delay"] = retry_delay
+            # Auto-refresh settings
+            auto_refresh_select = self.query_one("#auto_refresh_enabled", Select)
+            auto_refresh_enabled = True if (auto_refresh_select.value == "true") else False
+            auto_refresh_interval = int(self.query_one("#auto_refresh_interval", Input).value or 5)
+
+            self.config["settings"]["auto_refresh_enabled"] = auto_refresh_enabled
+            self.config["settings"]["auto_refresh_interval"] = auto_refresh_interval
             
             save_games_config(self.config_path, self.config)
             
@@ -981,6 +1028,14 @@ class BackupManagerApp(App):
                 self.manager.skip_locked_files = skip_locked
                 self.manager.retries = copy_retries
                 self.manager.retry_delay = retry_delay
+            # Start/stop auto-refresh based on new settings
+            try:
+                if auto_refresh_enabled:
+                    self.start_auto_refresh(auto_refresh_interval)
+                else:
+                    self.stop_auto_refresh()
+            except Exception:
+                pass
             
         except ValueError:
             self.notify("Invalid value for max backups", severity="error")
@@ -1013,6 +1068,54 @@ class BackupManagerApp(App):
     def action_refresh(self):
         """Refresh current view."""
         self.refresh_backup_list()
+
+    # Auto-refresh helpers
+    def start_auto_refresh(self, minutes: int):
+        """Start the background auto-refresh task. Minutes must be >= 1."""
+        try:
+            minutes = max(1, int(minutes))
+        except Exception:
+            minutes = 5
+
+        # If existing task running, cancel it first
+        if self._auto_refresh_task and not self._auto_refresh_task.done():
+            try:
+                self._auto_refresh_task.cancel()
+            except Exception:
+                pass
+
+        # Create asyncio task
+        loop = asyncio.get_event_loop()
+        self._auto_refresh_task = loop.create_task(self._auto_refresh_loop(minutes))
+
+    def stop_auto_refresh(self):
+        """Stop the background auto-refresh task if running."""
+        if self._auto_refresh_task and not self._auto_refresh_task.done():
+            try:
+                self._auto_refresh_task.cancel()
+            except Exception:
+                pass
+        self._auto_refresh_task = None
+
+    async def _auto_refresh_loop(self, minutes: int):
+        """Async loop that refreshes backups every `minutes` minutes."""
+        try:
+            while True:
+                # Wait for the configured interval (in seconds)
+                await asyncio.sleep(max(1, int(minutes)) * 60)
+                # Call refresh on the main thread/context
+                try:
+                    # Use call_from_thread to safely update UI if running in different thread
+                    self.call_from_thread(self.refresh_backup_list)
+                except Exception:
+                    # Fallback to direct call
+                    try:
+                        self.refresh_backup_list()
+                    except Exception:
+                        pass
+        except asyncio.CancelledError:
+            # Task was cancelled; just exit
+            return
     
     def action_create_backup(self):
         """Create backup via keyboard shortcut."""

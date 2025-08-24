@@ -44,7 +44,7 @@ GameConfigDialog {
 
 .section-header {
     text-style: bold;
-    color: $primary-lighten-2;
+    color: #f2d5fcff;
     background: $panel-lighten-2;
     margin: 0 0 0 0;
     padding: 0 0 0 0;
